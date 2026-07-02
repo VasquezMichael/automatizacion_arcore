@@ -1,0 +1,24 @@
+{
+  "name": "arcore-poc",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "login": "node src/login.js",
+    "test:stock": "node src/index.js",
+    "test:images": "node src/probeImages.js",
+    "start": "npm run test:stock",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.15.0",
+    "dotenv": "^17.4.2",
+    "playwright": "^1.59.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

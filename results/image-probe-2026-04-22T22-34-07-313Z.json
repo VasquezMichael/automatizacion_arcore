@@ -1,0 +1,50 @@
+[
+  {
+    "cardIndex": 0,
+    "codigo": "25929",
+    "nombre": "Artículos",
+    "imageUrl": null,
+    "imageWidth": null,
+    "imageHeight": null,
+    "imageArea": null,
+    "imageFuente": null,
+    "imageAlt": null,
+    "observaciones": "No se encontró imagen válida en esta card"
+  },
+  {
+    "cardIndex": 2,
+    "codigo": "25929",
+    "nombre": "Artículos",
+    "imageUrl": null,
+    "imageWidth": null,
+    "imageHeight": null,
+    "imageArea": null,
+    "imageFuente": null,
+    "imageAlt": null,
+    "observaciones": "No se encontró imagen válida en esta card"
+  },
+  {
+    "cardIndex": 3,
+    "codigo": "25929",
+    "nombre": "",
+    "imageUrl": null,
+    "imageWidth": null,
+    "imageHeight": null,
+    "imageArea": null,
+    "imageFuente": null,
+    "imageAlt": null,
+    "observaciones": "No se encontró imagen válida en esta card"
+  },
+  {
+    "cardIndex": 4,
+    "codigo": "25929",
+    "nombre": "",
+    "imageUrl": null,
+    "imageWidth": null,
+    "imageHeight": null,
+    "imageArea": null,
+    "imageFuente": null,
+    "imageAlt": null,
+    "observaciones": "No se encontró imagen válida en esta card"
+  }
+]
