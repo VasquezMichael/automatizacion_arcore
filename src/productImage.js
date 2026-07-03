@@ -17,6 +17,7 @@ function looksLikeImageUrl(value) {
   if (typeof value !== "string") return false;
   const src = value.trim().toLowerCase();
   if (!src) return false;
+  if (src.includes("empty-image") || src.includes("placeholder")) return false;
   if (src.startsWith("data:image/")) return true;
   if (/\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|$)/.test(src)) return true;
   if (src.includes("/img/") || src.includes("/image") || src.includes("media"))

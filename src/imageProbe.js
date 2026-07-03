@@ -33,6 +33,14 @@ async function extractProductImages() {
     console.log("Esperando que carguen los productos...");
     await page.waitForTimeout(3000);
 
+    await page.evaluate(async () => {
+      for (let i = 0; i < 6; i++) {
+        window.scrollTo(0, document.body.scrollHeight);
+        await new Promise((resolve) => setTimeout(resolve, 700));
+      }
+      window.scrollTo(0, 0);
+    });
+
     // Extracción contextual: buscar cards de producto
     const products = await page.evaluate(() => {
       const results = [];
@@ -40,6 +48,9 @@ async function extractProductImages() {
 
       // Estrategia 1: Buscar elementos con clases comunes de "card" o "product"
       const possibleSelectors = [
+        "button.MuiCardActionArea-root",
+        ".MuiCardActionArea-root",
+        ".MuiCard-root",
         ".product",
         ".card",
         "[data-product]",
@@ -83,6 +94,7 @@ async function extractProductImages() {
 
       cards.forEach((card, cardIndex) => {
         try {
+          const rawText = (card.textContent || "").replace(/\s+/g, " ").trim();
           // Extraer código del producto
           let codigo = "";
           const codePatterns = [
@@ -102,9 +114,37 @@ async function extractProductImages() {
 
           // Si no encuentra con selectores, buscar números largos en el texto
           if (!codigo) {
-            const textContent = card.textContent || "";
-            const codeMatch = textContent.match(/\b\d{5,}\b/);
+            const codeMatch = rawText.match(
+              /C[oó]digo:\s*([A-Za-z0-9 ._-]+?)(?=Marca:|Precio|$)/i,
+            );
+            if (codeMatch) codigo = codeMatch[1].trim();
+          }
+
+          if (!codigo) {
+            const codeMatch = rawText.match(/\b[A-Za-z0-9][A-Za-z0-9._-]{4,}\b/);
             if (codeMatch) codigo = codeMatch[0];
+          }
+
+          let marcaId =
+            card.getAttribute("data-marca-id") ||
+            card.getAttribute("data-marca") ||
+            card.getAttribute("data-brand-id") ||
+            "";
+          let marca =
+            card.getAttribute("data-marca-nombre") ||
+            card.getAttribute("data-brand") ||
+            "";
+
+          if (!marcaId) {
+            const marcaIdMatch = rawText.match(
+              /\b(?:marcaId|marca id|brand id)\s*[:#-]?\s*([A-Za-z0-9_-]{1,12})\b/i,
+            );
+            if (marcaIdMatch) marcaId = marcaIdMatch[1];
+          }
+
+          if (!marca) {
+            const marcaMatch = rawText.match(/Marca:\s*(.+?)(?=Precio|$)/i);
+            if (marcaMatch) marca = marcaMatch[1].trim();
           }
 
           // Extraer nombre del producto
@@ -126,6 +166,16 @@ async function extractProductImages() {
               if (nombre && nombre.length > 5) break;
             }
           }
+
+          if (!nombre) {
+            nombre = rawText.split(/C[oó]digo:/i)[0].trim();
+          }
+
+          const precioMatch = rawText.match(/Su precio\s*\$\s*([0-9.,]+)/i);
+          const precio = precioMatch ? precioMatch[1] : null;
+          const disponibilidadTexto = rawText.match(
+            /(No disponible|Disponible c\/espera|Disponible|Alternativas)/i,
+          )?.[0] || "";
 
           // Extraer imágenes dentro de la card
           const cardImages = Array.from(card.querySelectorAll("img")).map(
@@ -189,6 +239,7 @@ async function extractProductImages() {
               "loader",
               "placeholder",
               "default",
+              "empty-image",
               "svg",
               "/images/",
             ];
@@ -209,7 +260,12 @@ async function extractProductImages() {
             results.push({
               cardIndex,
               codigo,
+              marcaId,
+              marca,
               nombre,
+              precio,
+              disponibilidadTexto,
+              rawText,
               imageUrl: mainImage.src,
               imageWidth: mainImage.width,
               imageHeight: mainImage.height,
@@ -226,7 +282,12 @@ async function extractProductImages() {
             results.push({
               cardIndex,
               codigo,
+              marcaId,
+              marca,
               nombre,
+              precio,
+              disponibilidadTexto,
+              rawText,
               imageUrl: null,
               imageWidth: null,
               imageHeight: null,
