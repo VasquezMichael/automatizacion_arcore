@@ -7,6 +7,7 @@
     "login": "node src/login.js",
     "test:stock": "node src/index.js",
     "test:images": "node src/probeImages.js",
+    "test:codes": "node src/extractByCodesTest.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"
