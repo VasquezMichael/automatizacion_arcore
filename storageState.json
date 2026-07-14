@@ -2,7 +2,7 @@
   "cookies": [
     {
       "name": "SESSION",
-      "value": "d6215aae-93d7-4626-a4bc-aa890d73696d",
+      "value": "afca7077-eb63-4852-99c9-7b2821ad8a28",
       "domain": "clientes.arcore.com",
       "path": "/",
       "expires": -1,
@@ -17,7 +17,7 @@
       "localStorage": [
         {
           "name": "deviceId-juampi0967@gmail.com",
-          "value": "\"d057c705-b6fb-4109-b2dc-945c4a902b6d\""
+          "value": "\"e23490c0-7c25-47a3-a638-82e02b81d18e\""
         }
       ]
     }

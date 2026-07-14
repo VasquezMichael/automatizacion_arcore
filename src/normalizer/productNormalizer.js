@@ -24,9 +24,12 @@ function buildExternalId({ codigo, marcaId, marca }) {
 function normalizeProduct(rawProduct) {
   const stock = rawProduct.stock || {};
   const codigo = cleanString(rawProduct.codigo || stock.codigo);
+  const searchedCode = cleanString(rawProduct.searchedCode || codigo);
+  const matchedCode = cleanString(rawProduct.matchedCode || codigo);
+  const matchType = cleanString(rawProduct.matchType || "exact");
   const marcaId = cleanString(rawProduct.marcaId || stock.marcaId);
   const marca = cleanString(rawProduct.marca || stock.marca);
-  const descripcionStock = cleanString(
+  const descripcion = cleanString(
     stock.descripcion || rawProduct.descripcion || rawProduct.disponibilidadTexto,
   );
   const descripcionAlternativa = cleanString(
@@ -34,20 +37,24 @@ function normalizeProduct(rawProduct) {
   );
   const color = cleanString(stock.color || rawProduct.color);
   const nombre = cleanString(
-    rawProduct.nombre || descripcionStock || descripcionAlternativa || codigo,
+    rawProduct.nombre || descripcion || descripcionAlternativa || codigo,
   );
 
   return {
-    externalId: buildExternalId({ codigo, marcaId, marca }),
+    externalId: buildExternalId({ codigo: matchedCode || codigo, marcaId, marca }),
+    searchedCode,
+    matchedCode,
+    matchType,
     codigo,
     marcaId,
     marca,
     nombre,
-    descripcionStock,
+    descripcion,
+    descripcionStock: descripcion,
     descripcionAlternativa,
     color,
     estadoDisponibilidad: classifyAvailability({
-      descripcion: descripcionStock,
+      descripcion,
       descripcionAlternativa,
       color,
     }),

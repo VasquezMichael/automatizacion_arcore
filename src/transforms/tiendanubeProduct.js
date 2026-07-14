@@ -10,6 +10,7 @@ function buildTiendanubeReadyProduct(product) {
     name: product.nombre,
     description:
       product.descripcionAlternativa ||
+      product.descripcion ||
       product.descripcionStock ||
       product.nombre ||
       "",
@@ -26,6 +27,11 @@ function buildTiendanubeReadyProduct(product) {
       : [],
     availabilityStatus: product.estadoDisponibilidad,
     source: product.origen,
+    metadata: {
+      searchedCode: product.searchedCode,
+      matchedCode: product.matchedCode,
+      matchType: product.matchType,
+    },
     sourceExternalId: product.externalId,
     brand: product.marca || product.marcaId || "",
     category: product.categoria || "",

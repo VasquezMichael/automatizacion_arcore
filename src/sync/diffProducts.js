@@ -1,5 +1,9 @@
 const RELEVANT_FIELDS = [
   "nombre",
+  "searchedCode",
+  "matchedCode",
+  "matchType",
+  "descripcion",
   "descripcionStock",
   "descripcionAlternativa",
   "color",
@@ -33,14 +37,14 @@ function diffProduct(previous, current) {
   return changes;
 }
 
-function compareProducts(previousProducts = [], currentProducts = []) {
+function compareProducts(previousProducts = [], currentProducts = [], notFoundProducts = []) {
   const previousById = indexByExternalId(previousProducts);
   const currentById = indexByExternalId(currentProducts);
 
   const newProducts = [];
   const updatedProducts = [];
   const unchangedProducts = [];
-  const removedOrUnavailableProducts = [];
+  const unavailableProducts = [];
 
   for (const current of currentProducts) {
     const previous = previousById.get(current.externalId);
@@ -60,16 +64,13 @@ function compareProducts(previousProducts = [], currentProducts = []) {
     }
 
     if (current.estadoDisponibilidad === "UNAVAILABLE") {
-      removedOrUnavailableProducts.push({
-        reason: "UNAVAILABLE",
-        product: current,
-      });
+      unavailableProducts.push(current);
     }
   }
 
   for (const previous of previousProducts) {
     if (!currentById.has(previous.externalId)) {
-      removedOrUnavailableProducts.push({
+      notFoundProducts.push({
         reason: "MISSING_FROM_CURRENT_EXTRACTION",
         product: previous,
       });
@@ -80,7 +81,8 @@ function compareProducts(previousProducts = [], currentProducts = []) {
     newProducts,
     updatedProducts,
     unchangedProducts,
-    removedOrUnavailableProducts,
+    notFoundProducts,
+    unavailableProducts,
   };
 }
 

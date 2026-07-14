@@ -584,6 +584,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+  ensureAuthenticatedSession,
   extractCode,
+  looksLikeRealImage,
   main,
+  readCodes,
 };
