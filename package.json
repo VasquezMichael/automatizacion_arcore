@@ -8,6 +8,7 @@
     "test:stock": "node src/index.js",
     "test:images": "node src/probeImages.js",
     "test:codes": "node src/extractByCodesTest.js",
+    "tiendanube:test-connection": "node src/tiendanube/testConnection.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"
