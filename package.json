@@ -9,6 +9,9 @@
     "test:images": "node src/probeImages.js",
     "test:codes": "node src/extractByCodesTest.js",
     "tiendanube:test-connection": "node src/tiendanube/testConnection.js",
+    "tiendanube:test-create": "node src/tiendanube/testCreateProduct.js",
+    "tiendanube:test-status": "node src/tiendanube/testSyncStatus.js",
+    "tiendanube:audit-skus": "node src/tiendanube/auditSkus.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"

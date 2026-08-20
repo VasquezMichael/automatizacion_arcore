@@ -36,6 +36,7 @@ function buildHeaders(config) {
     Authorization: `Bearer ${config.accessToken}`,
     "User-Agent": config.userAgent,
     Accept: "application/json",
+    "Content-Type": "application/json; charset=utf-8",
   };
 }
 
@@ -61,20 +62,49 @@ function createTiendanubeClient(config = getTiendanubeConfig()) {
     return response;
   }
 
-  async function listProducts({ page = 1, perPage = 10 } = {}) {
+  async function listProducts({ page = 1, perPage = 10, q, fields } = {}) {
+    const params = {
+      page,
+      per_page: perPage,
+    };
+
+    if (q) params.q = q;
+    if (fields) params.fields = fields;
+
     const response = await http.get("/products", {
-      params: {
-        page,
-        per_page: perPage,
-      },
+      params,
     });
     return response;
   }
 
+  async function getProductBySku(sku) {
+    const response = await http.get(`/products/sku/${encodeURIComponent(sku)}`);
+    return response;
+  }
+
+  async function createProduct(productPayload) {
+    const response = await http.post("/products", productPayload);
+    return response;
+  }
+
+  async function createProductImage(productId, imagePayload) {
+    const response = await http.post(`/products/${productId}/images`, imagePayload);
+    return response;
+  }
+
+  async function updateProduct(productId, productPayload) {
+    const response = await http.put(`/products/${productId}`, productPayload);
+    return response;
+  }
+
   return {
+    createProduct,
+    createProductImage,
     config,
+    getProductBySku,
     getStore,
     listProducts,
+    updateProduct,
   };
 }
 

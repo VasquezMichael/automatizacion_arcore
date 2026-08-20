@@ -1,0 +1,919 @@
+[
+  {
+    "normalizedSku": "415071510",
+    "matchCount": 12,
+    "matches": [
+      {
+        "sku": "415 0715 10",
+        "productId": 288987250,
+        "variantId": 1293268060,
+        "name": "BIMASA LUK - PARTNER",
+        "published": true,
+        "visibility": "visible",
+        "price": "670000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0715 10",
+        "productId": 289317681,
+        "variantId": 1294635719,
+        "name": "BIMASA LUK - BERLINGO",
+        "published": true,
+        "visibility": "visible",
+        "price": "670000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0715 10",
+        "productId": 289323932,
+        "variantId": 1294655478,
+        "name": "BIMASA LUK - CACTUS",
+        "published": true,
+        "visibility": "visible",
+        "price": "670000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0715 10",
+        "productId": 289324138,
+        "variantId": 1294656211,
+        "name": "BIMASA LUK - PICASSO",
+        "published": true,
+        "visibility": "visible",
+        "price": "670000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0715 10",
+        "productId": 289324424,
+        "variantId": 1294657474,
+        "name": "BIMASA LUK - JUMPY",
+        "published": true,
+        "visibility": "visible",
+        "price": "670000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0715 10",
+        "productId": 289324686,
+        "variantId": 1294659271,
+        "name": "BIMASA LUK - 208",
+        "published": true,
+        "visibility": "visible",
+        "price": "670000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0715 10",
+        "productId": 289324866,
+        "variantId": 1294660388,
+        "name": "BIMASA LUK - 308",
+        "published": true,
+        "visibility": "visible",
+        "price": "670000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0715 10",
+        "productId": 289325074,
+        "variantId": 1294661572,
+        "name": "BIMASA LUK - 508",
+        "published": true,
+        "visibility": "visible",
+        "price": "670000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0715 10",
+        "productId": 289325240,
+        "variantId": 1294662150,
+        "name": "BIMASA LUK - 2008",
+        "published": true,
+        "visibility": "visible",
+        "price": "670000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0715 10",
+        "productId": 289325358,
+        "variantId": 1294662925,
+        "name": "BIMASA LUK - 3008",
+        "published": true,
+        "visibility": "visible",
+        "price": "670000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0715 10",
+        "productId": 289325509,
+        "variantId": 1294663666,
+        "name": "BIMASA LUK - 5008",
+        "published": true,
+        "visibility": "visible",
+        "price": "670000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0715 10",
+        "productId": 289325643,
+        "variantId": 1294664244,
+        "name": "BIMASA LUK - EXPERT",
+        "published": true,
+        "visibility": "visible",
+        "price": "670000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "602000600",
+    "matchCount": 9,
+    "matches": [
+      {
+        "sku": "602 0006 00",
+        "productId": 289266837,
+        "variantId": 1294428482,
+        "name": "KIT 2CT LUK - GOLF",
+        "published": true,
+        "visibility": "visible",
+        "price": "1520000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0006 00",
+        "productId": 289268222,
+        "variantId": 1294431786,
+        "name": "KIT 2CT LUK - A1",
+        "published": true,
+        "visibility": "visible",
+        "price": "1520000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0006 00",
+        "productId": 289268585,
+        "variantId": 1294432777,
+        "name": "KIT 2CT LUK - A3",
+        "published": true,
+        "visibility": "visible",
+        "price": "1520000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0006 00",
+        "productId": 289268734,
+        "variantId": 1294433217,
+        "name": "KIT 2CT LUK - Q2",
+        "published": true,
+        "visibility": "visible",
+        "price": "1520000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0006 00",
+        "productId": 289268892,
+        "variantId": 1294433628,
+        "name": "KIT 2CT LUK - TT",
+        "published": true,
+        "visibility": "visible",
+        "price": "1520000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0006 00",
+        "productId": 289269148,
+        "variantId": 1294434462,
+        "name": "KIT 2CT LUK - PASSAT",
+        "published": true,
+        "visibility": "visible",
+        "price": "1520000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0006 00",
+        "productId": 289269312,
+        "variantId": 1294434932,
+        "name": "KIT 2CT LUK - TCROSS",
+        "published": true,
+        "visibility": "visible",
+        "price": "1520000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0006 00",
+        "productId": 289269575,
+        "variantId": 1294435677,
+        "name": "KIT 2CT LUK - TIGUAN",
+        "published": true,
+        "visibility": "visible",
+        "price": "1520000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0006 00",
+        "productId": 289269728,
+        "variantId": 1294436136,
+        "name": "KIT 2CT LUK - SCIROCCO",
+        "published": true,
+        "visibility": "visible",
+        "price": "1520000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "415058310",
+    "matchCount": 6,
+    "matches": [
+      {
+        "sku": "415 0583 10",
+        "productId": 289015626,
+        "variantId": 1293398325,
+        "name": "BIMASA LUK - VENTO",
+        "published": true,
+        "visibility": "visible",
+        "price": "675000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0583 10",
+        "productId": 289017034,
+        "variantId": 1293403431,
+        "name": "BIMASA LUK - PASSAT",
+        "published": true,
+        "visibility": "visible",
+        "price": "675000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0583 10",
+        "productId": 289054503,
+        "variantId": 1293619523,
+        "name": "BIMASA LUK - A3",
+        "published": true,
+        "visibility": "visible",
+        "price": "675000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0583 10",
+        "productId": 289055313,
+        "variantId": 1293624616,
+        "name": "BIMASA LUK - Q2",
+        "published": true,
+        "visibility": "visible",
+        "price": "675000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0583 10",
+        "productId": 289055923,
+        "variantId": 1293628034,
+        "name": "BIMASA LUK - Q3",
+        "published": true,
+        "visibility": "visible",
+        "price": "675000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0583 10",
+        "productId": 289056822,
+        "variantId": 1293633067,
+        "name": "BIMASA LUK - TIGUAN",
+        "published": true,
+        "visibility": "visible",
+        "price": "675000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "602000100",
+    "matchCount": 5,
+    "matches": [
+      {
+        "sku": "602 0001 00",
+        "productId": 289261710,
+        "variantId": 1294412003,
+        "name": "KIT 2CT LUK - GOLF",
+        "published": true,
+        "visibility": "visible",
+        "price": "2100000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0001 00",
+        "productId": 289262201,
+        "variantId": 1294413851,
+        "name": "KIT 2CT LUK - A1",
+        "published": true,
+        "visibility": "visible",
+        "price": "2100000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0001 00",
+        "productId": 289262350,
+        "variantId": 1294414677,
+        "name": "KIT 2CT LUK - A3",
+        "published": true,
+        "visibility": "visible",
+        "price": "2100000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0001 00",
+        "productId": 289262711,
+        "variantId": 1294416121,
+        "name": "KIT 2CT LUK - PASSAT",
+        "published": true,
+        "visibility": "visible",
+        "price": "2100000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0001 00",
+        "productId": 289262983,
+        "variantId": 1294417577,
+        "name": "KIT 2CT LUK - SCIROCCO",
+        "published": true,
+        "visibility": "visible",
+        "price": "2100000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "622325233",
+    "matchCount": 5,
+    "matches": [
+      {
+        "sku": "622 3252 33",
+        "productId": 289275291,
+        "variantId": 1294453037,
+        "name": "CONJUNTO + CRAPODINA LUK - CRONOS",
+        "published": true,
+        "visibility": "visible",
+        "price": "295000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "622 3252 33",
+        "productId": 289275845,
+        "variantId": 1294455572,
+        "name": "CONJUNTO + CRAPODINA LUK - ARGO",
+        "published": true,
+        "visibility": "visible",
+        "price": "295000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "622 3252 33",
+        "productId": 289275952,
+        "variantId": 1294456037,
+        "name": "CONJUNTO + CRAPODINA LUK - BRAVO",
+        "published": true,
+        "visibility": "visible",
+        "price": "295000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "622 3252 33",
+        "productId": 289276157,
+        "variantId": 1294457017,
+        "name": "CONJUNTO + CRAPODINA LUK - IDEA",
+        "published": true,
+        "visibility": "visible",
+        "price": "295000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "622 3252 33",
+        "productId": 289276235,
+        "variantId": 1294457506,
+        "name": "CONJUNTO + CRAPODINA LUK - LINEA",
+        "published": true,
+        "visibility": "visible",
+        "price": "295000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "415069710",
+    "matchCount": 4,
+    "matches": [
+      {
+        "sku": "415 0697 10",
+        "productId": 289003959,
+        "variantId": 1293342374,
+        "name": "BIMASA LUK - TORO",
+        "published": true,
+        "visibility": "visible",
+        "price": "840000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0697 10",
+        "productId": 289004786,
+        "variantId": 1293346083,
+        "name": "BIMASA LUK - RENEGADE",
+        "published": true,
+        "visibility": "visible",
+        "price": "840000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0697 10",
+        "productId": 289005541,
+        "variantId": 1293349664,
+        "name": "BIMASA LUK - COMPASS",
+        "published": true,
+        "visibility": "visible",
+        "price": "840000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0697 10",
+        "productId": 289006366,
+        "variantId": 1293352577,
+        "name": "BIMASA LUK - CHEROKEE",
+        "published": true,
+        "visibility": "visible",
+        "price": "840000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "626301909",
+    "matchCount": 4,
+    "matches": [
+      {
+        "sku": "626 3019 09",
+        "productId": 289237892,
+        "variantId": 1294325603,
+        "name": "CONJUNTO LUK - S10",
+        "published": true,
+        "visibility": "visible",
+        "price": "390000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "626 3019 09",
+        "productId": 289238049,
+        "variantId": 1294326112,
+        "name": "CONJUNTO LUK - FRONTIER",
+        "published": true,
+        "visibility": "visible",
+        "price": "390000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "626 3019 09",
+        "productId": 289238314,
+        "variantId": 1294326743,
+        "name": "CONJUNTO LUK - BLAZER",
+        "published": true,
+        "visibility": "visible",
+        "price": "390000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "626 3019 09",
+        "productId": 289238491,
+        "variantId": 1294327325,
+        "name": "CONJUNTO LUK - X TERRA",
+        "published": true,
+        "visibility": "visible",
+        "price": "390000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "415076809",
+    "matchCount": 3,
+    "matches": [
+      {
+        "sku": "415 0768 09",
+        "productId": 288995997,
+        "variantId": 1293313824,
+        "name": "BIMASA LUK - GOLF",
+        "published": true,
+        "visibility": "visible",
+        "price": "630000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0768 09",
+        "productId": 288996675,
+        "variantId": 1293316491,
+        "name": "BIMASA LUK - A1",
+        "published": true,
+        "visibility": "visible",
+        "price": "630000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0768 09",
+        "productId": 289037329,
+        "variantId": 1293511897,
+        "name": "BIMASA LUK - SCIROCCO",
+        "published": true,
+        "visibility": "visible",
+        "price": "630000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "510015710",
+    "matchCount": 3,
+    "matches": [
+      {
+        "sku": "510 0157 10",
+        "productId": 289246121,
+        "variantId": 1294362477,
+        "name": "CRAPODINA LUK - 308",
+        "published": true,
+        "visibility": "visible",
+        "price": "175000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "510 0157 10",
+        "productId": 289246589,
+        "variantId": 1294363772,
+        "name": "CRAPODINA LUK - 408",
+        "published": true,
+        "visibility": "visible",
+        "price": "175000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "510 0157 10",
+        "productId": 289246800,
+        "variantId": 1294364451,
+        "name": "CRAPODINA LUK - C4",
+        "published": true,
+        "visibility": "visible",
+        "price": "175000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "602000800",
+    "matchCount": 3,
+    "matches": [
+      {
+        "sku": "602 0008 00",
+        "productId": 289264359,
+        "variantId": 1294422687,
+        "name": "KIT POWERSHIFTER LUK - FOCUS",
+        "published": true,
+        "visibility": "visible",
+        "price": "1950000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0008 00",
+        "productId": 289264518,
+        "variantId": 1294423334,
+        "name": "KIT POWERSHIFTER LUK - FIESTA",
+        "published": true,
+        "visibility": "visible",
+        "price": "1950000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "602 0008 00",
+        "productId": 289264721,
+        "variantId": 1294423867,
+        "name": "KIT POWERSHIFTER LUK - ECOSPORT",
+        "published": true,
+        "visibility": "visible",
+        "price": "1950000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "624352709",
+    "matchCount": 3,
+    "matches": [
+      {
+        "sku": "624 3527 09",
+        "productId": 289232280,
+        "variantId": 1294303879,
+        "name": "CONJUNTO LUK - 308",
+        "published": true,
+        "visibility": "visible",
+        "price": "340000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "624 3527 09",
+        "productId": 289232656,
+        "variantId": 1294305267,
+        "name": "CONJUNTO LUK - 408",
+        "published": true,
+        "visibility": "visible",
+        "price": "340000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "624 3527 09",
+        "productId": 289232758,
+        "variantId": 1294305636,
+        "name": "CONJUNTO LUK - C4",
+        "published": true,
+        "visibility": "visible",
+        "price": "340000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "415032210",
+    "matchCount": 2,
+    "matches": [
+      {
+        "sku": "415 0322 10",
+        "productId": 288989355,
+        "variantId": 1293280362,
+        "name": "BIMASA LUK - CRUZE",
+        "published": true,
+        "visibility": "visible",
+        "price": "570000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0322 10",
+        "productId": 288997392,
+        "variantId": 1293319242,
+        "name": "BIMASA LUK - CAPTIVA",
+        "published": true,
+        "visibility": "visible",
+        "price": "570000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "415064710",
+    "matchCount": 2,
+    "matches": [
+      {
+        "sku": "415 0647 10",
+        "productId": 288991438,
+        "variantId": 1293290466,
+        "name": "BIMASA LUK - FOCUS",
+        "published": true,
+        "visibility": "visible",
+        "price": "610000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "415 0647 10",
+        "productId": 289806444,
+        "variantId": 1296503554,
+        "name": "BIMASA LUK - MONDEO",
+        "published": true,
+        "visibility": "visible",
+        "price": "690000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "417001911",
+    "matchCount": 2,
+    "matches": [
+      {
+        "sku": "417 0019 11",
+        "productId": 289316337,
+        "variantId": 1294631644,
+        "name": "BIMASA LUK - BORA",
+        "published": true,
+        "visibility": "visible",
+        "price": "490000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "417 0019 11",
+        "productId": 289821956,
+        "variantId": 1296557687,
+        "name": "BIMASA LUK - VENTO",
+        "published": true,
+        "visibility": "visible",
+        "price": "490000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "600035700",
+    "matchCount": 2,
+    "matches": [
+      {
+        "sku": "600 0357 00",
+        "productId": 289280992,
+        "variantId": 1294481593,
+        "name": "KIT COMPLETO LUK - EXPERT",
+        "published": true,
+        "visibility": "visible",
+        "price": "1100000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "600 0357 00",
+        "productId": 289281445,
+        "variantId": 1294483292,
+        "name": "KIT COMPLETO LUK - JUMPY",
+        "published": true,
+        "visibility": "visible",
+        "price": "1100000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "624394700",
+    "matchCount": 2,
+    "matches": [
+      {
+        "sku": "624 3947 00",
+        "productId": 289280023,
+        "variantId": 1294476677,
+        "name": "CONJUNTO + RODAMIENTO LUK - EXPERT",
+        "published": true,
+        "visibility": "visible",
+        "price": "420000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "624 3947 00",
+        "productId": 289280333,
+        "variantId": 1294478373,
+        "name": "CONJUNTO + RODAMIENTO LUK - JUMPY",
+        "published": true,
+        "visibility": "visible",
+        "price": "420000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "626302209",
+    "matchCount": 2,
+    "matches": [
+      {
+        "sku": "626 3022 09",
+        "productId": 289234132,
+        "variantId": 1294310864,
+        "name": "CONJUNTO LUK - HILUX",
+        "published": true,
+        "visibility": "visible",
+        "price": "440000.00",
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "626 3022 09",
+        "productId": 289234249,
+        "variantId": 1294311354,
+        "name": "CONJUNTO LUK - SW4",
+        "published": true,
+        "visibility": "visible",
+        "price": "440000.00",
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "k11321",
+    "matchCount": 2,
+    "matches": [
+      {
+        "sku": "K11321",
+        "productId": 290641553,
+        "variantId": 1299630025,
+        "name": "FILTRO SAKURA - TOYOTA HILUX",
+        "published": false,
+        "visibility": "hidden",
+        "price": null,
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "K11321",
+        "productId": 290641787,
+        "variantId": 1299630730,
+        "name": "FILTRO SAKURA - TOYOTA SW4",
+        "published": false,
+        "visibility": "hidden",
+        "price": null,
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  },
+  {
+    "normalizedSku": "k18013",
+    "matchCount": 2,
+    "matches": [
+      {
+        "sku": "K18013",
+        "productId": 290641299,
+        "variantId": 1299628863,
+        "name": "FILTRO SAKURA - NISSAN FRONTIER",
+        "published": false,
+        "visibility": "hidden",
+        "price": null,
+        "stock": null,
+        "stockManagement": false
+      },
+      {
+        "sku": "K18013",
+        "productId": 290641406,
+        "variantId": 1299629396,
+        "name": "FILTRO SAKURA - RENAULT ALASKAN",
+        "published": false,
+        "visibility": "hidden",
+        "price": null,
+        "stock": null,
+        "stockManagement": false
+      }
+    ]
+  }
+]
