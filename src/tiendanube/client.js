@@ -82,6 +82,11 @@ function createTiendanubeClient(config = getTiendanubeConfig()) {
     return response;
   }
 
+  async function getProduct(productId) {
+    const response = await http.get(`/products/${productId}`);
+    return response;
+  }
+
   async function createProduct(productPayload) {
     const response = await http.post("/products", productPayload);
     return response;
@@ -101,6 +106,7 @@ function createTiendanubeClient(config = getTiendanubeConfig()) {
     createProduct,
     createProductImage,
     config,
+    getProduct,
     getProductBySku,
     getStore,
     listProducts,

@@ -1,15 +1,196 @@
 {
-  "sourceSku": "4150768090",
-  "normalizedSku": "4150768090",
-  "matchedSku": "4150768090",
-  "productId": 362233091,
-  "variantId": 1580855954,
-  "arcoreAvailability": "UNAVAILABLE",
-  "publishedBefore": false,
-  "expectedPublished": false,
-  "action": "NONE",
+  "sourceSku": "415 0715 10",
+  "normalizedSku": "415071510",
+  "type": "LEGACY_GROUP",
+  "matchedSku": "",
+  "productId": null,
+  "variantId": null,
+  "arcoreAvailability": "UNKNOWN",
+  "publishedBefore": null,
+  "expectedPublished": null,
+  "action": "NO_CHANGE",
   "dryRun": true,
   "updated": false,
+  "created": false,
+  "updatedProductIds": [],
+  "skippedProductIds": [
+    288987250,
+    289317681,
+    289323932,
+    289324138,
+    289324424,
+    289324686,
+    289324866,
+    289325074,
+    289325240,
+    289325358,
+    289325509,
+    289325643
+  ],
+  "warnings": [
+    {
+      "code": "UNKNOWN_AVAILABILITY",
+      "message": "Estado Arcore UNKNOWN. No se modifica el LEGACY_GROUP."
+    }
+  ],
   "errors": [],
-  "timestamp": "2026-08-20T23:04:08.667Z"
+  "timestamp": "2026-08-28T19:31:11.151Z",
+  "expectedMatches": 12,
+  "actualMatches": 12,
+  "legacyGroup": {
+    "normalizedSku": "415071510",
+    "type": "LEGACY_GROUP",
+    "expectedMatches": 12,
+    "actualMatches": 12,
+    "registeredProductIdsCount": 12,
+    "registeredVariantIdsCount": 12,
+    "publications": [
+      {
+        "productId": 288987250,
+        "variantId": 1293268060,
+        "sku": "415 0715 10",
+        "matchedSku": "415 0715 10",
+        "normalizedSku": "415071510",
+        "published": true,
+        "name": {
+          "es": "BIMASA LUK - PARTNER"
+        },
+        "visibility": "visible"
+      },
+      {
+        "productId": 289317681,
+        "variantId": 1294635719,
+        "sku": "415 0715 10",
+        "matchedSku": "415 0715 10",
+        "normalizedSku": "415071510",
+        "published": true,
+        "name": {
+          "es": "BIMASA LUK - BERLINGO"
+        },
+        "visibility": "visible"
+      },
+      {
+        "productId": 289323932,
+        "variantId": 1294655478,
+        "sku": "415 0715 10",
+        "matchedSku": "415 0715 10",
+        "normalizedSku": "415071510",
+        "published": true,
+        "name": {
+          "es": "BIMASA LUK - CACTUS"
+        },
+        "visibility": "visible"
+      },
+      {
+        "productId": 289324138,
+        "variantId": 1294656211,
+        "sku": "415 0715 10",
+        "matchedSku": "415 0715 10",
+        "normalizedSku": "415071510",
+        "published": true,
+        "name": {
+          "es": "BIMASA LUK - PICASSO"
+        },
+        "visibility": "visible"
+      },
+      {
+        "productId": 289324424,
+        "variantId": 1294657474,
+        "sku": "415 0715 10",
+        "matchedSku": "415 0715 10",
+        "normalizedSku": "415071510",
+        "published": true,
+        "name": {
+          "es": "BIMASA LUK - JUMPY"
+        },
+        "visibility": "visible"
+      },
+      {
+        "productId": 289324686,
+        "variantId": 1294659271,
+        "sku": "415 0715 10",
+        "matchedSku": "415 0715 10",
+        "normalizedSku": "415071510",
+        "published": true,
+        "name": {
+          "es": "BIMASA LUK - 208"
+        },
+        "visibility": "visible"
+      },
+      {
+        "productId": 289324866,
+        "variantId": 1294660388,
+        "sku": "415 0715 10",
+        "matchedSku": "415 0715 10",
+        "normalizedSku": "415071510",
+        "published": true,
+        "name": {
+          "es": "BIMASA LUK - 308"
+        },
+        "visibility": "visible"
+      },
+      {
+        "productId": 289325074,
+        "variantId": 1294661572,
+        "sku": "415 0715 10",
+        "matchedSku": "415 0715 10",
+        "normalizedSku": "415071510",
+        "published": true,
+        "name": {
+          "es": "BIMASA LUK - 508"
+        },
+        "visibility": "visible"
+      },
+      {
+        "productId": 289325240,
+        "variantId": 1294662150,
+        "sku": "415 0715 10",
+        "matchedSku": "415 0715 10",
+        "normalizedSku": "415071510",
+        "published": true,
+        "name": {
+          "es": "BIMASA LUK - 2008"
+        },
+        "visibility": "visible"
+      },
+      {
+        "productId": 289325358,
+        "variantId": 1294662925,
+        "sku": "415 0715 10",
+        "matchedSku": "415 0715 10",
+        "normalizedSku": "415071510",
+        "published": true,
+        "name": {
+          "es": "BIMASA LUK - 3008"
+        },
+        "visibility": "visible"
+      },
+      {
+        "productId": 289325509,
+        "variantId": 1294663666,
+        "sku": "415 0715 10",
+        "matchedSku": "415 0715 10",
+        "normalizedSku": "415071510",
+        "published": true,
+        "name": {
+          "es": "BIMASA LUK - 5008"
+        },
+        "visibility": "visible"
+      },
+      {
+        "productId": 289325643,
+        "variantId": 1294664244,
+        "sku": "415 0715 10",
+        "matchedSku": "415 0715 10",
+        "normalizedSku": "415071510",
+        "published": true,
+        "name": {
+          "es": "BIMASA LUK - EXPERT"
+        },
+        "visibility": "visible"
+      }
+    ],
+    "missing": [],
+    "validationIssues": []
+  }
 }

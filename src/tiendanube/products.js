@@ -51,6 +51,19 @@ function buildFoundProduct(product, variant, sourceSku, status, lookupMethod) {
   };
 }
 
+function buildMatchRecord(product, variant) {
+  return {
+    productId: product.id,
+    variantId: variant.id,
+    sku: variant.sku,
+    matchedSku: variant.sku,
+    normalizedSku: normalizeSku(variant.sku),
+    published: getPublished(product),
+    name: product.name,
+    visibility: product.visibility,
+  };
+}
+
 function collectVariantMatches(products, sourceSku) {
   const normalized = normalizeSku(sourceSku);
   const exactMatches = [];
@@ -169,6 +182,95 @@ async function findProductBySkuViaSearch(sku, client) {
   };
 }
 
+async function findSkuMatches(sku, client = createTiendanubeClient()) {
+  const queries = Array.from(new Set([sku, normalizeSku(sku)].filter(Boolean)));
+  const productsById = new Map();
+  const normalized = normalizeSku(sku);
+
+  for (const query of queries) {
+    const result = await searchProductsByQuery(query, client);
+    for (const product of result.products) {
+      productsById.set(product.id, product);
+    }
+  }
+
+  const matchesByVariantId = new Map();
+
+  for (const product of productsById.values()) {
+    const variants = Array.isArray(product.variants) ? product.variants : [];
+    for (const variant of variants) {
+      if (normalizeSku(variant.sku) === normalized) {
+        matchesByVariantId.set(variant.id, buildMatchRecord(product, variant));
+      }
+    }
+  }
+
+  return {
+    sourceSku: sku,
+    normalizedSku: normalized,
+    matches: Array.from(matchesByVariantId.values()),
+  };
+}
+
+async function getProductById(productId, client = createTiendanubeClient()) {
+  const response = await client.getProduct(productId);
+  if (response.status === 404) return null;
+  assertSuccess(response, `GET /products/${productId}`, [200]);
+  return response.data;
+}
+
+async function getLegacyGroupMatches(group, client = createTiendanubeClient()) {
+  const matches = [];
+  const missing = [];
+
+  for (let i = 0; i < group.productIds.length; i++) {
+    const productId = group.productIds[i];
+    const variantId = group.variantIds[i];
+    const product = await getProductById(productId, client);
+
+    if (!product) {
+      missing.push({
+        productId,
+        variantId,
+        reason: "PRODUCT_NOT_FOUND",
+      });
+      continue;
+    }
+
+    const variants = Array.isArray(product.variants) ? product.variants : [];
+    const variant = variants.find((item) => item.id === variantId);
+
+    if (!variant) {
+      missing.push({
+        productId,
+        variantId,
+        reason: "VARIANT_NOT_FOUND",
+      });
+      continue;
+    }
+
+    if (normalizeSku(variant.sku) !== group.normalizedSku) {
+      missing.push({
+        productId,
+        variantId,
+        reason: "SKU_CHANGED",
+        currentSku: variant.sku,
+      });
+      continue;
+    }
+
+    matches.push(buildMatchRecord(product, variant));
+  }
+
+  return {
+    normalizedSku: group.normalizedSku,
+    expectedMatches: group.expectedMatches,
+    actualMatches: matches.length,
+    matches,
+    missing,
+  };
+}
+
 async function findProductBySku(sku, client = createTiendanubeClient()) {
   const response = await client.getProductBySku(sku);
 
@@ -248,6 +350,8 @@ async function updateProductPublishedStatus(
 module.exports = {
   createProduct,
   findProductBySku,
+  findSkuMatches,
+  getLegacyGroupMatches,
   updateProductPublishedStatus,
   uploadProductImage,
 };

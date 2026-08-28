@@ -1,0 +1,376 @@
+{
+  "415032210": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "415032210",
+    "expectedMatches": 2,
+    "productIds": [
+      288989355,
+      288997392
+    ],
+    "variantIds": [
+      1293280362,
+      1293319242
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "415058310": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "415058310",
+    "expectedMatches": 6,
+    "productIds": [
+      289015626,
+      289017034,
+      289054503,
+      289055313,
+      289055923,
+      289056822
+    ],
+    "variantIds": [
+      1293398325,
+      1293403431,
+      1293619523,
+      1293624616,
+      1293628034,
+      1293633067
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "415064710": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "415064710",
+    "expectedMatches": 2,
+    "productIds": [
+      288991438,
+      289806444
+    ],
+    "variantIds": [
+      1293290466,
+      1296503554
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "415069710": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "415069710",
+    "expectedMatches": 4,
+    "productIds": [
+      289003959,
+      289004786,
+      289005541,
+      289006366
+    ],
+    "variantIds": [
+      1293342374,
+      1293346083,
+      1293349664,
+      1293352577
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "415071510": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "415071510",
+    "expectedMatches": 12,
+    "productIds": [
+      288987250,
+      289317681,
+      289323932,
+      289324138,
+      289324424,
+      289324686,
+      289324866,
+      289325074,
+      289325240,
+      289325358,
+      289325509,
+      289325643
+    ],
+    "variantIds": [
+      1293268060,
+      1294635719,
+      1294655478,
+      1294656211,
+      1294657474,
+      1294659271,
+      1294660388,
+      1294661572,
+      1294662150,
+      1294662925,
+      1294663666,
+      1294664244
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.042Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "415076809": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "415076809",
+    "expectedMatches": 3,
+    "productIds": [
+      288995997,
+      288996675,
+      289037329
+    ],
+    "variantIds": [
+      1293313824,
+      1293316491,
+      1293511897
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "417001911": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "417001911",
+    "expectedMatches": 2,
+    "productIds": [
+      289316337,
+      289821956
+    ],
+    "variantIds": [
+      1294631644,
+      1296557687
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "510015710": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "510015710",
+    "expectedMatches": 3,
+    "productIds": [
+      289246121,
+      289246589,
+      289246800
+    ],
+    "variantIds": [
+      1294362477,
+      1294363772,
+      1294364451
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "600035700": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "600035700",
+    "expectedMatches": 2,
+    "productIds": [
+      289280992,
+      289281445
+    ],
+    "variantIds": [
+      1294481593,
+      1294483292
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "602000100": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "602000100",
+    "expectedMatches": 5,
+    "productIds": [
+      289261710,
+      289262201,
+      289262350,
+      289262711,
+      289262983
+    ],
+    "variantIds": [
+      1294412003,
+      1294413851,
+      1294414677,
+      1294416121,
+      1294417577
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "602000600": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "602000600",
+    "expectedMatches": 9,
+    "productIds": [
+      289266837,
+      289268222,
+      289268585,
+      289268734,
+      289268892,
+      289269148,
+      289269312,
+      289269575,
+      289269728
+    ],
+    "variantIds": [
+      1294428482,
+      1294431786,
+      1294432777,
+      1294433217,
+      1294433628,
+      1294434462,
+      1294434932,
+      1294435677,
+      1294436136
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "602000800": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "602000800",
+    "expectedMatches": 3,
+    "productIds": [
+      289264359,
+      289264518,
+      289264721
+    ],
+    "variantIds": [
+      1294422687,
+      1294423334,
+      1294423867
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "622325233": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "622325233",
+    "expectedMatches": 5,
+    "productIds": [
+      289275291,
+      289275845,
+      289275952,
+      289276157,
+      289276235
+    ],
+    "variantIds": [
+      1294453037,
+      1294455572,
+      1294456037,
+      1294457017,
+      1294457506
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "624352709": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "624352709",
+    "expectedMatches": 3,
+    "productIds": [
+      289232280,
+      289232656,
+      289232758
+    ],
+    "variantIds": [
+      1294303879,
+      1294305267,
+      1294305636
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "624394700": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "624394700",
+    "expectedMatches": 2,
+    "productIds": [
+      289280023,
+      289280333
+    ],
+    "variantIds": [
+      1294476677,
+      1294478373
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "626301909": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "626301909",
+    "expectedMatches": 4,
+    "productIds": [
+      289237892,
+      289238049,
+      289238314,
+      289238491
+    ],
+    "variantIds": [
+      1294325603,
+      1294326112,
+      1294326743,
+      1294327325
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "626302209": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "626302209",
+    "expectedMatches": 2,
+    "productIds": [
+      289234132,
+      289234249
+    ],
+    "variantIds": [
+      1294310864,
+      1294311354
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "k11321": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "k11321",
+    "expectedMatches": 2,
+    "productIds": [
+      290641553,
+      290641787
+    ],
+    "variantIds": [
+      1299630025,
+      1299630730
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  },
+  "k18013": {
+    "type": "LEGACY_GROUP",
+    "normalizedSku": "k18013",
+    "expectedMatches": 2,
+    "productIds": [
+      290641299,
+      290641406
+    ],
+    "variantIds": [
+      1299628863,
+      1299629396
+    ],
+    "createdFrom": "output/tiendanube-ambiguous-skus.json",
+    "createdAt": "2026-08-28T19:19:42.043Z",
+    "note": "Historical duplicated SKU group. Do not add new SKUs here automatically during sync."
+  }
+}

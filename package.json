@@ -12,6 +12,7 @@
     "tiendanube:test-create": "node src/tiendanube/testCreateProduct.js",
     "tiendanube:test-status": "node src/tiendanube/testSyncStatus.js",
     "tiendanube:audit-skus": "node src/tiendanube/auditSkus.js",
+    "tiendanube:generate-legacy-sku-groups": "node src/tiendanube/generateLegacySkuGroups.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"

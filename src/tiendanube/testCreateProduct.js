@@ -13,6 +13,7 @@ const { createTiendanubeClient, getTiendanubeConfig } = require("./client");
 const {
   createProduct,
   findProductBySku,
+  findSkuMatches,
   uploadProductImage,
 } = require("./products");
 const { mapArcoreProductToTiendanube } = require("./mapper");
@@ -166,6 +167,26 @@ async function main() {
     const mapped = mapArcoreProductToTiendanube(arcoreProduct);
     result.mappedSku = mapped.sku;
 
+    const normalizedMatches = await findSkuMatches(mapped.sku, client);
+    if (normalizedMatches.matches.length > 0) {
+      result.created = false;
+      result.errors.push({
+        code: "CREATE_ABORTED_EXISTING_SKU",
+        message:
+          "Se cancelo la creacion porque ya existe al menos una publicacion equivalente por SKU normalizado.",
+        normalizedSku: normalizedMatches.normalizedSku,
+        matches: normalizedMatches.matches,
+      });
+      console.log("\nCreacion cancelada.");
+      console.log("- Resultado: CREATE_ABORTED_EXISTING_SKU");
+      console.log(`- normalizedSku: ${normalizedMatches.normalizedSku}`);
+      console.log(`- coincidencias existentes: ${normalizedMatches.matches.length}`);
+      console.log("\nNo se realizaron modificaciones.");
+      writeResult(result);
+      process.exitCode = 1;
+      return;
+    }
+
     if (mapped.sku !== searchedSku) {
       console.log("\nBuscando SKU mapeado en Tiendanube antes de crear...");
       console.log(`- SKU mapeado: ${mapped.sku}`);
@@ -187,6 +208,26 @@ async function main() {
       }
 
       console.log("- Resultado SKU mapeado: NO EXISTE");
+    }
+
+    const preCreateMatches = await findSkuMatches(mapped.sku, client);
+    if (preCreateMatches.matches.length > 0) {
+      result.created = false;
+      result.errors.push({
+        code: "CREATE_ABORTED_EXISTING_SKU",
+        message:
+          "Se cancelo la creacion en la segunda validacion previa al POST.",
+        normalizedSku: preCreateMatches.normalizedSku,
+        matches: preCreateMatches.matches,
+      });
+      console.log("\nCreacion cancelada en segunda validacion.");
+      console.log("- Resultado: CREATE_ABORTED_EXISTING_SKU");
+      console.log(`- normalizedSku: ${preCreateMatches.normalizedSku}`);
+      console.log(`- coincidencias existentes: ${preCreateMatches.matches.length}`);
+      console.log("\nNo se realizaron modificaciones.");
+      writeResult(result);
+      process.exitCode = 1;
+      return;
     }
 
     console.log("\nCreando producto de prueba...");
