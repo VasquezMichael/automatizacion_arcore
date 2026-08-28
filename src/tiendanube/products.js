@@ -337,6 +337,18 @@ async function uploadProductImage(productId, imageUrl, client = createTiendanube
   return response.data;
 }
 
+async function listProductImages(productId, client = createTiendanubeClient()) {
+  const response = await client.listProductImages(productId);
+  assertSuccess(response, `GET /products/${productId}/images`, [200]);
+  return Array.isArray(response.data) ? response.data : [];
+}
+
+async function deleteProductImage(productId, imageId, client = createTiendanubeClient()) {
+  const response = await client.deleteProductImage(productId, imageId);
+  assertSuccess(response, `DELETE /products/${productId}/images/${imageId}`, [200]);
+  return response.data;
+}
+
 async function updateProductPublishedStatus(
   productId,
   published,
@@ -349,9 +361,11 @@ async function updateProductPublishedStatus(
 
 module.exports = {
   createProduct,
+  deleteProductImage,
   findProductBySku,
   findSkuMatches,
   getLegacyGroupMatches,
+  listProductImages,
   updateProductPublishedStatus,
   uploadProductImage,
 };

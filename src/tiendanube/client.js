@@ -97,6 +97,21 @@ function createTiendanubeClient(config = getTiendanubeConfig()) {
     return response;
   }
 
+  async function listProductImages(productId, { page = 1, perPage = 50 } = {}) {
+    const response = await http.get(`/products/${productId}/images`, {
+      params: {
+        page,
+        per_page: perPage,
+      },
+    });
+    return response;
+  }
+
+  async function deleteProductImage(productId, imageId) {
+    const response = await http.delete(`/products/${productId}/images/${imageId}`);
+    return response;
+  }
+
   async function updateProduct(productId, productPayload) {
     const response = await http.put(`/products/${productId}`, productPayload);
     return response;
@@ -105,10 +120,12 @@ function createTiendanubeClient(config = getTiendanubeConfig()) {
   return {
     createProduct,
     createProductImage,
+    deleteProductImage,
     config,
     getProduct,
     getProductBySku,
     getStore,
+    listProductImages,
     listProducts,
     updateProduct,
   };
