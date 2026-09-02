@@ -11,6 +11,7 @@
     "tiendanube:test-connection": "node src/tiendanube/testConnection.js",
     "tiendanube:test-create": "node src/tiendanube/testCreateProduct.js",
     "tiendanube:test-status": "node src/tiendanube/testSyncStatus.js",
+    "tiendanube:test-image": "node src/tiendanube/testImageSync.js",
     "tiendanube:audit-skus": "node src/tiendanube/auditSkus.js",
     "tiendanube:generate-legacy-sku-groups": "node src/tiendanube/generateLegacySkuGroups.js",
     "sync:prepare": "node src/syncPrepare.js",
