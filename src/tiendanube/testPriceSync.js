@@ -1,0 +1,430 @@
+const fs = require("fs");
+const path = require("path");
+const { chromium } = require("playwright");
+const dotenv = require("dotenv");
+const { loadStorageState } = require("../session");
+const { ensureAuthenticatedSession, extractCode } = require("../extractByCodesTest");
+const { normalizeProduct } = require("../normalizer/productNormalizer");
+const { createTiendanubeClient, getTiendanubeConfig } = require("./client");
+const {
+  findSkuMatches,
+  getLegacyGroupMatches,
+} = require("./products");
+const { getLegacySkuGroup } = require("./legacySkuGroups");
+const { normalizeSku } = require("./sku");
+const {
+  calculateSalePrice,
+  moneyDifference,
+  moneyEquals,
+  parseMoney,
+} = require("../pricing/priceCalculator");
+
+dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
+
+const OUTPUT_DIR = path.resolve(__dirname, "..", "..", "output");
+const RESULT_FILE = path.resolve(OUTPUT_DIR, "tiendanube-test-price.json");
+const DRY_RUN = true;
+
+function ensureOutputDir() {
+  if (!fs.existsSync(OUTPUT_DIR)) {
+    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  }
+}
+
+function writeResult(result) {
+  ensureOutputDir();
+  fs.writeFileSync(RESULT_FILE, `${JSON.stringify(result, null, 2)}\n`, "utf-8");
+}
+
+function pickName(value) {
+  if (!value) return "sin nombre";
+  if (typeof value === "string") return value;
+  return value.es || value.pt || value.en || JSON.stringify(value);
+}
+
+function serializeError(error) {
+  if (!error.response) {
+    return {
+      message: error.message,
+      code: error.code || undefined,
+      value: error.value,
+    };
+  }
+
+  return {
+    message: error.message,
+    status: error.response.status,
+    statusText: error.response.statusText,
+    data: error.response.data,
+  };
+}
+
+async function getArcoreProduct(sourceSku) {
+  await ensureAuthenticatedSession();
+
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({
+    storageState: { cookies: loadStorageState().cookies },
+  });
+  const page = await context.newPage();
+
+  try {
+    const extraction = await extractCode(page, sourceSku);
+    if (!extraction.found) {
+      throw new Error(`No se encontro producto en Arcore para SKU ${sourceSku}.`);
+    }
+    return normalizeProduct(extraction.product.raw);
+  } finally {
+    await browser.close();
+  }
+}
+
+function legacyPairKey(productId, variantId) {
+  return `${productId}:${variantId}`;
+}
+
+function validateLegacyGroup({ group, legacy, currentSkuMatches }) {
+  const issues = [];
+  const expectedMatches = Number(group.expectedMatches) || 0;
+  const productIds = Array.isArray(group.productIds) ? group.productIds : [];
+  const variantIds = Array.isArray(group.variantIds) ? group.variantIds : [];
+  const registeredPairs = new Set(
+    productIds.map((productId, index) => legacyPairKey(productId, variantIds[index])),
+  );
+  const actualPairs = new Set(
+    currentSkuMatches.matches.map((match) =>
+      legacyPairKey(match.productId, match.variantId),
+    ),
+  );
+
+  if (productIds.length !== expectedMatches) {
+    issues.push({
+      code: "LEGACY_PRODUCT_IDS_COUNT_MISMATCH",
+      expectedMatches,
+      productIdsCount: productIds.length,
+    });
+  }
+
+  if (variantIds.length !== expectedMatches) {
+    issues.push({
+      code: "LEGACY_VARIANT_IDS_COUNT_MISMATCH",
+      expectedMatches,
+      variantIdsCount: variantIds.length,
+    });
+  }
+
+  if (currentSkuMatches.matches.length !== expectedMatches) {
+    issues.push({
+      code: "LEGACY_ACTUAL_MATCHES_MISMATCH",
+      expectedMatches,
+      actualMatches: currentSkuMatches.matches.length,
+    });
+  }
+
+  if (legacy.missing.length > 0) {
+    issues.push({
+      code: "LEGACY_GROUP_MISSING_PRODUCT",
+      missing: legacy.missing,
+    });
+  }
+
+  for (const pair of registeredPairs) {
+    if (!actualPairs.has(pair)) {
+      issues.push({
+        code: "LEGACY_REGISTERED_PAIR_NOT_IN_CURRENT_MATCHES",
+        pair,
+      });
+    }
+  }
+
+  for (const pair of actualPairs) {
+    if (!registeredPairs.has(pair)) {
+      issues.push({
+        code: "LEGACY_CURRENT_MATCH_NOT_REGISTERED",
+        pair,
+      });
+    }
+  }
+
+  return {
+    ok: issues.length === 0,
+    issues,
+    expectedMatches,
+    actualMatches: currentSkuMatches.matches.length,
+    registeredProductIdsCount: productIds.length,
+    registeredVariantIdsCount: variantIds.length,
+  };
+}
+
+function decidePriceAction({ calculatedPrice, currentPrice }) {
+  if (currentPrice === null) {
+    return {
+      action: "MANUAL_REVIEW",
+      difference: null,
+      reason: "Tiendanube no devolvio un precio utilizable para comparar.",
+    };
+  }
+
+  const difference = moneyDifference(calculatedPrice, currentPrice);
+  if (moneyEquals(calculatedPrice, currentPrice)) {
+    return {
+      action: "PRICE_NO_CHANGE",
+      difference,
+      reason: "El precio actual coincide normalizado a 2 decimales.",
+    };
+  }
+
+  return {
+    action: "PRICE_UPDATE",
+    difference,
+    reason: "El precio actual difiere del precio calculado.",
+  };
+}
+
+function analyzePublicationPrice(match, calculatedPrice) {
+  const currentPrice = parseMoney(match.price);
+  const decision = decidePriceAction({ calculatedPrice, currentPrice });
+
+  return {
+    productId: match.productId,
+    variantId: match.variantId,
+    sku: match.sku,
+    name: pickName(match.name),
+    published: match.published,
+    currentPrice,
+    rawCurrentPrice: match.price,
+    difference: decision.difference,
+    action: decision.action,
+    reason: decision.reason,
+  };
+}
+
+function aggregatePublicationAction(publications) {
+  const actions = publications.map((publication) => publication.action);
+  if (actions.includes("MANUAL_REVIEW")) return "MANUAL_REVIEW";
+  if (actions.includes("PRICE_UPDATE")) return "PRICE_UPDATE";
+  if (actions.length > 0 && actions.every((action) => action === "PRICE_NO_CHANGE")) {
+    return "PRICE_NO_CHANGE";
+  }
+  return "MANUAL_REVIEW";
+}
+
+function initResult(sourceSku) {
+  return {
+    sourceSku,
+    normalizedSku: normalizeSku(sourceSku),
+    type: "",
+    productId: null,
+    variantId: null,
+    supplierPrice: null,
+    category: null,
+    multiplier: null,
+    baseCalculatedPrice: null,
+    calculatedPrice: null,
+    currentPrice: null,
+    difference: null,
+    action: "",
+    dryRun: DRY_RUN,
+    updated: false,
+    warnings: [],
+    errors: [],
+    publications: [],
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function applyPricingResult(result, pricing) {
+  result.supplierPrice = pricing.supplierPrice;
+  result.category = pricing.category;
+  result.multiplier = pricing.multiplier;
+  result.baseCalculatedPrice = pricing.baseCalculatedPrice;
+  result.calculatedPrice = pricing.calculatedPrice;
+
+  if (pricing.supplierPrice === 0) {
+    result.warnings.push({
+      code: "ZERO_SUPPLIER_PRICE",
+      message:
+        "El precio proveedor es 0. El motor lo calcula, pero requiere revision comercial antes de escrituras reales.",
+    });
+  }
+}
+
+async function main() {
+  const sourceSku = process.argv[2] || process.env.TIENDANUBE_TEST_SKU || "";
+  const result = initResult(sourceSku);
+
+  try {
+    ensureOutputDir();
+
+    if (!sourceSku.trim()) {
+      throw new Error(
+        "Falta SKU. Ejecuta: npm run tiendanube:test-price -- \"415 0549 10\"",
+      );
+    }
+
+    getTiendanubeConfig();
+    const client = createTiendanubeClient();
+
+    console.log("=== POC DRY-RUN DE PRECIOS ===\n");
+    console.log("Proteccion:");
+    console.log("- Este comando no ejecuta PUT/POST/DELETE de precios.");
+    console.log("- dryRun forzado: true\n");
+    console.log("SKU solicitado:");
+    console.log(`- sourceSku: ${sourceSku}`);
+    console.log(`- normalizedSku: ${result.normalizedSku}`);
+
+    const arcoreProduct = await getArcoreProduct(sourceSku);
+
+    console.log("\nArcore:");
+    console.log(`- matchedCode: ${arcoreProduct.matchedCode || arcoreProduct.codigo}`);
+    console.log(`- precio proveedor: ${arcoreProduct.precio}`);
+
+    let pricing;
+    try {
+      pricing = calculateSalePrice(arcoreProduct.precio);
+      applyPricingResult(result, pricing);
+    } catch (error) {
+      result.action = error.code || "INVALID_SUPPLIER_PRICE";
+      result.errors.push({
+        code: error.code || "INVALID_SUPPLIER_PRICE",
+        ...serializeError(error),
+      });
+      console.log("\nDecision:");
+      console.log(`- accion requerida: ${result.action}`);
+      console.log("- No se realizaron escrituras.");
+      writeResult(result);
+      process.exitCode = 1;
+      return;
+    }
+
+    console.log(`- categoria: ${pricing.category}`);
+    console.log(`- coeficiente: ${pricing.multiplier}`);
+    console.log(`- precio base calculado: ${pricing.baseCalculatedPrice}`);
+    console.log(`- precio final redondeado: ${pricing.calculatedPrice}`);
+
+    const group = getLegacySkuGroup(result.normalizedSku);
+    let matches = [];
+
+    if (group) {
+      result.type = "LEGACY_GROUP";
+      const legacy = await getLegacyGroupMatches(group, client);
+      const currentSkuMatches = await findSkuMatches(group.normalizedSku, client);
+      const validation = validateLegacyGroup({
+        group,
+        legacy,
+        currentSkuMatches,
+      });
+
+      result.expectedMatches = validation.expectedMatches;
+      result.actualMatches = validation.actualMatches;
+      result.registeredProductIdsCount = validation.registeredProductIdsCount;
+      result.registeredVariantIdsCount = validation.registeredVariantIdsCount;
+
+      console.log("\nTiendanube:");
+      console.log("- type: LEGACY_GROUP");
+      console.log(`- expectedMatches: ${validation.expectedMatches}`);
+      console.log(`- actualMatches: ${validation.actualMatches}`);
+      console.log(`- productIds registrados: ${validation.registeredProductIdsCount}`);
+      console.log(`- variantIds registrados: ${validation.registeredVariantIdsCount}`);
+
+      if (!validation.ok) {
+        result.action = "MANUAL_REVIEW";
+        result.errors.push({
+          code: "MANUAL_REVIEW",
+          message:
+            "La validacion del LEGACY_GROUP no coincide exactamente con Tiendanube.",
+          issues: validation.issues,
+        });
+        console.log("\nDecision:");
+        console.log("- accion requerida: MANUAL_REVIEW");
+        console.log("- No se realizaron escrituras.");
+        writeResult(result);
+        process.exitCode = 1;
+        return;
+      }
+
+      matches = legacy.matches;
+    } else {
+      result.type = "SINGLE";
+      const skuMatches = await findSkuMatches(sourceSku, client);
+
+      console.log("\nTiendanube:");
+      console.log("- type: SINGLE");
+      console.log(`- matches por SKU normalizado: ${skuMatches.matches.length}`);
+
+      if (skuMatches.matches.length !== 1) {
+        result.action = "MANUAL_REVIEW";
+        result.errors.push({
+          code: "MANUAL_REVIEW",
+          message: "El POC de precio SINGLE requiere exactamente un match seguro.",
+          matches: skuMatches.matches,
+        });
+        console.log("\nDecision:");
+        console.log("- accion requerida: MANUAL_REVIEW");
+        console.log("- No se realizaron escrituras.");
+        writeResult(result);
+        process.exitCode = 1;
+        return;
+      }
+
+      matches = skuMatches.matches;
+      result.productId = matches[0].productId;
+      result.variantId = matches[0].variantId;
+    }
+
+    console.log("\nComparando precios:");
+    for (const match of matches) {
+      const publication = analyzePublicationPrice(match, pricing.calculatedPrice);
+      result.publications.push(publication);
+      console.log(
+        `- productId: ${publication.productId} | variantId: ${publication.variantId} | actual: ${publication.currentPrice} | diferencia: ${publication.difference} | accion: ${publication.action}`,
+      );
+    }
+
+    if (result.type === "SINGLE") {
+      const publication = result.publications[0];
+      result.currentPrice = publication.currentPrice;
+      result.difference = publication.difference;
+      result.action = publication.action;
+    } else {
+      result.action = aggregatePublicationAction(result.publications);
+    }
+
+    console.log("\nDecision:");
+    console.log(`- accion calculada: ${result.action}`);
+    console.log("- escritura ejecutada: false");
+    console.log("\nDry Run: true");
+    console.log("No se realizaron escrituras.");
+
+    writeResult(result);
+    process.exitCode = result.errors.length > 0 ? 1 : 0;
+  } catch (error) {
+    result.action = error.code || "ERROR";
+    result.errors.push({
+      code: error.code || "ERROR",
+      ...serializeError(error),
+    });
+    writeResult(result);
+
+    console.error("\nError en tiendanube:test-price:");
+    console.error(`- mensaje: ${error.message}`);
+    if (error.response) {
+      console.error(`- status HTTP: ${error.response.status}`);
+      console.error("- respuesta Tiendanube:");
+      console.error(JSON.stringify(error.response.data, null, 2));
+    }
+    console.error("\nNo se imprime el access token por seguridad.");
+    console.error("No se realizaron escrituras.");
+    process.exitCode = 1;
+  }
+}
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  analyzePublicationPrice,
+  decidePriceAction,
+  main,
+};

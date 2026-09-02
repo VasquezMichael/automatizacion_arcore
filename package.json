@@ -12,8 +12,10 @@
     "tiendanube:test-create": "node src/tiendanube/testCreateProduct.js",
     "tiendanube:test-status": "node src/tiendanube/testSyncStatus.js",
     "tiendanube:test-image": "node src/tiendanube/testImageSync.js",
+    "tiendanube:test-price": "node src/tiendanube/testPriceSync.js",
     "tiendanube:audit-skus": "node src/tiendanube/auditSkus.js",
     "tiendanube:generate-legacy-sku-groups": "node src/tiendanube/generateLegacySkuGroups.js",
+    "pricing:test-rules": "node src/pricing/testPriceCalculator.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"

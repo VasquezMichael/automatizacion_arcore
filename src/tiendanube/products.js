@@ -58,6 +58,8 @@ function buildMatchRecord(product, variant) {
     sku: variant.sku,
     matchedSku: variant.sku,
     normalizedSku: normalizeSku(variant.sku),
+    price: variant.price,
+    promotionalPrice: variant.promotional_price,
     published: getPublished(product),
     name: product.name,
     visibility: product.visibility,
