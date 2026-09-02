@@ -54,6 +54,8 @@ function serializeError(error) {
       message: error.message,
       status: error.status || null,
       url: error.url || null,
+      contentType: error.contentType || null,
+      hostname: error.hostname || null,
     };
   }
 
@@ -176,6 +178,7 @@ function aggregatePublicationAction(publications) {
 
   if (actions.includes("ERROR")) return "ERROR";
   if (actions.includes("MANUAL_REVIEW")) return "MANUAL_REVIEW";
+  if (actions.includes("IMAGE_OLD_DELETE_FAILED")) return "IMAGE_OLD_DELETE_FAILED";
   if (actions.includes("IMAGE_UPLOAD_FAILED")) return "IMAGE_UPLOAD_FAILED";
   if (actions.includes("IMAGE_DOWNLOAD_FAILED")) return "IMAGE_DOWNLOAD_FAILED";
   if (actions.includes("IMAGE_REPLACE")) return "IMAGE_REPLACE";
@@ -188,7 +191,21 @@ function aggregatePublicationAction(publications) {
 }
 
 function actionWouldWrite(action) {
-  return action === "IMAGE_CREATE" || action === "IMAGE_REPLACE";
+  return (
+    action === "IMAGE_CREATE" ||
+    action === "IMAGE_REPLACE" ||
+    action === "IMAGE_UPLOAD_FAILED" ||
+    action === "IMAGE_OLD_DELETE_FAILED"
+  );
+}
+
+function actionIndicatesExecutedWrite(action) {
+  return (
+    action === "IMAGE_CREATE" ||
+    action === "IMAGE_REPLACE" ||
+    action === "IMAGE_UPLOAD_FAILED" ||
+    action === "IMAGE_OLD_DELETE_FAILED"
+  );
 }
 
 async function analyzePublication({ match, arcoreImageUrl, arcoreHash, client, dryRun }) {
@@ -199,11 +216,14 @@ async function analyzePublication({ match, arcoreImageUrl, arcoreHash, client, d
     published: match.published,
     tiendanubeImageCount: 0,
     imageId: null,
+    oldImageId: null,
+    newImageId: null,
     tiendanubeImageUrl: null,
     arcoreHash,
     tiendanubeHash: null,
     action: "",
     updated: false,
+    partial: false,
     warnings: [],
     errors: [],
   };
@@ -222,6 +242,7 @@ async function analyzePublication({ match, arcoreImageUrl, arcoreHash, client, d
 
     const primaryImage = getPrimaryImage(images);
     publication.imageId = primaryImage?.id || null;
+    publication.oldImageId = primaryImage?.id || null;
     publication.tiendanubeImageUrl = primaryImage?.src || null;
 
     console.log(
@@ -244,6 +265,7 @@ async function analyzePublication({ match, arcoreImageUrl, arcoreHash, client, d
         }
 
         publication.imageId = uploaded.id || null;
+        publication.newImageId = uploaded.id || null;
         publication.updated = true;
       }
       return publication;
@@ -290,7 +312,22 @@ async function analyzePublication({ match, arcoreImageUrl, arcoreHash, client, d
       return publication;
     }
 
-    await deleteProductImage(match.productId, primaryImage.id, client);
+    publication.newImageId = uploaded.id;
+
+    try {
+      await deleteProductImage(match.productId, primaryImage.id, client);
+    } catch (error) {
+      publication.action = "IMAGE_OLD_DELETE_FAILED";
+      publication.imageId = uploaded.id;
+      publication.updated = true;
+      publication.partial = true;
+      publication.errors.push({
+        code: "IMAGE_OLD_DELETE_FAILED",
+        ...serializeError(error),
+      });
+      return publication;
+    }
+
     publication.imageId = uploaded.id;
     publication.updated = true;
     return publication;
@@ -496,7 +533,15 @@ async function main() {
     console.log("\nDecision:");
     console.log(`- accion calculada: ${result.action}`);
     console.log(`- requeriria escritura en ejecucion real: ${actionWouldWrite(result.action)}`);
-    console.log(`- escritura ejecutada: ${!dryRun && actionWouldWrite(result.action)}`);
+    console.log(
+      `- escritura ejecutada: ${
+        !dryRun &&
+        result.publications.some(
+          (publication) =>
+            publication.updated || actionIndicatesExecutedWrite(publication.action),
+        )
+      }`,
+    );
     console.log(`\nDry Run: ${dryRun}`);
     if (dryRun) {
       console.log("No se realizaron escrituras.");

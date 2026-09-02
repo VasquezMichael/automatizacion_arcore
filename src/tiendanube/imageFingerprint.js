@@ -1,6 +1,54 @@
 const crypto = require("crypto");
 const axios = require("axios");
+const { baseUrl } = require("../config");
 const { loadStorageState, storageStateExists } = require("../session");
+
+const ARCORE_COOKIE_ALLOWED_HOSTS = Array.from(
+  new Set([new URL(baseUrl).hostname, "www.arcore.com"]),
+);
+
+function parseImageUrl(imageUrl) {
+  try {
+    return new URL(imageUrl);
+  } catch (error) {
+    const safeError = new Error("URL de imagen invalida.");
+    safeError.code = "INVALID_IMAGE_URL";
+    safeError.url = imageUrl;
+    throw safeError;
+  }
+}
+
+function assertArcoreCookieHostAllowed(imageUrl) {
+  const parsedUrl = parseImageUrl(imageUrl);
+
+  if (!ARCORE_COOKIE_ALLOWED_HOSTS.includes(parsedUrl.hostname)) {
+    const error = new Error(
+      `Host de imagen Arcore no permitido para enviar cookies: ${parsedUrl.hostname}`,
+    );
+    error.code = "ARCORE_IMAGE_HOST_NOT_ALLOWED";
+    error.url = imageUrl;
+    error.hostname = parsedUrl.hostname;
+    throw error;
+  }
+}
+
+function assertImageContentType(response, imageUrl) {
+  const contentType = String(response.headers["content-type"] || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+
+  if (!contentType.startsWith("image/")) {
+    const error = new Error(
+      `Content-Type invalido para imagen: ${contentType || "sin content-type"}`,
+    );
+    error.code = "INVALID_IMAGE_CONTENT_TYPE";
+    error.status = response.status;
+    error.contentType = contentType || null;
+    error.url = imageUrl;
+    throw error;
+  }
+}
 
 function buildCookieHeader() {
   if (!storageStateExists()) return "";
@@ -15,6 +63,7 @@ function buildCookieHeader() {
 async function downloadImageBuffer(imageUrl, { withArcoreAuth = false } = {}) {
   const headers = {};
   if (withArcoreAuth) {
+    assertArcoreCookieHostAllowed(imageUrl);
     const cookieHeader = buildCookieHeader();
     if (cookieHeader) headers.Cookie = cookieHeader;
   }
@@ -23,6 +72,7 @@ async function downloadImageBuffer(imageUrl, { withArcoreAuth = false } = {}) {
     headers,
     responseType: "arraybuffer",
     timeout: 30000,
+    maxRedirects: withArcoreAuth ? 0 : 5,
     validateStatus: () => true,
   });
 
@@ -33,6 +83,8 @@ async function downloadImageBuffer(imageUrl, { withArcoreAuth = false } = {}) {
     throw error;
   }
 
+  assertImageContentType(response, imageUrl);
+
   return Buffer.from(response.data);
 }
 
@@ -42,6 +94,7 @@ async function calculateImageHash(imageUrl, options = {}) {
 }
 
 module.exports = {
+  ARCORE_COOKIE_ALLOWED_HOSTS,
   calculateImageHash,
   downloadImageBuffer,
 };
