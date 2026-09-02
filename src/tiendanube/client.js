@@ -87,6 +87,11 @@ function createTiendanubeClient(config = getTiendanubeConfig()) {
     return response;
   }
 
+  async function getProductVariant(productId, variantId) {
+    const response = await http.get(`/products/${productId}/variants/${variantId}`);
+    return response;
+  }
+
   async function createProduct(productPayload) {
     const response = await http.post("/products", productPayload);
     return response;
@@ -117,6 +122,14 @@ function createTiendanubeClient(config = getTiendanubeConfig()) {
     return response;
   }
 
+  async function updateProductVariant(productId, variantId, variantPayload) {
+    const response = await http.put(
+      `/products/${productId}/variants/${variantId}`,
+      variantPayload,
+    );
+    return response;
+  }
+
   return {
     createProduct,
     createProductImage,
@@ -124,10 +137,12 @@ function createTiendanubeClient(config = getTiendanubeConfig()) {
     config,
     getProduct,
     getProductBySku,
+    getProductVariant,
     getStore,
     listProductImages,
     listProducts,
     updateProduct,
+    updateProductVariant,
   };
 }
 

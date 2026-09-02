@@ -221,6 +221,17 @@ async function getProductById(productId, client = createTiendanubeClient()) {
   return response.data;
 }
 
+async function getProductVariantById(
+  productId,
+  variantId,
+  client = createTiendanubeClient(),
+) {
+  const response = await client.getProductVariant(productId, variantId);
+  if (response.status === 404) return null;
+  assertSuccess(response, `GET /products/${productId}/variants/${variantId}`, [200]);
+  return response.data;
+}
+
 async function getLegacyGroupMatches(group, client = createTiendanubeClient()) {
   const matches = [];
   const missing = [];
@@ -361,13 +372,28 @@ async function updateProductPublishedStatus(
   return response.data;
 }
 
+async function updateVariantPrice(
+  productId,
+  variantId,
+  price,
+  client = createTiendanubeClient(),
+) {
+  const response = await client.updateProductVariant(productId, variantId, {
+    price,
+  });
+  assertSuccess(response, `PUT /products/${productId}/variants/${variantId}`, [200]);
+  return response.data;
+}
+
 module.exports = {
   createProduct,
   deleteProductImage,
   findProductBySku,
   findSkuMatches,
+  getProductVariantById,
   getLegacyGroupMatches,
   listProductImages,
   updateProductPublishedStatus,
+  updateVariantPrice,
   uploadProductImage,
 };

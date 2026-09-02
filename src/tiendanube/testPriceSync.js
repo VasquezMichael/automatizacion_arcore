@@ -8,7 +8,9 @@ const { normalizeProduct } = require("../normalizer/productNormalizer");
 const { createTiendanubeClient, getTiendanubeConfig } = require("./client");
 const {
   findSkuMatches,
+  getProductVariantById,
   getLegacyGroupMatches,
+  updateVariantPrice,
 } = require("./products");
 const { getLegacySkuGroup } = require("./legacySkuGroups");
 const { normalizeSku } = require("./sku");
@@ -23,7 +25,11 @@ dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
 
 const OUTPUT_DIR = path.resolve(__dirname, "..", "..", "output");
 const RESULT_FILE = path.resolve(OUTPUT_DIR, "tiendanube-test-price.json");
-const DRY_RUN = true;
+
+function isDryRun() {
+  const value = String(process.env.TIENDANUBE_DRY_RUN || "true").trim().toLowerCase();
+  return value !== "false";
+}
 
 function ensureOutputDir() {
   if (!fs.existsSync(OUTPUT_DIR)) {
@@ -193,9 +199,15 @@ function analyzePublicationPrice(match, calculatedPrice) {
     published: match.published,
     currentPrice,
     rawCurrentPrice: match.price,
+    oldPrice: currentPrice,
+    requestedPrice: calculatedPrice,
+    verifiedPrice: null,
     difference: decision.difference,
     action: decision.action,
     reason: decision.reason,
+    writeAttempted: false,
+    updated: false,
+    errors: [],
   };
 }
 
@@ -209,7 +221,7 @@ function aggregatePublicationAction(publications) {
   return "MANUAL_REVIEW";
 }
 
-function initResult(sourceSku) {
+function initResult(sourceSku, dryRun) {
   return {
     sourceSku,
     normalizedSku: normalizeSku(sourceSku),
@@ -222,9 +234,13 @@ function initResult(sourceSku) {
     baseCalculatedPrice: null,
     calculatedPrice: null,
     currentPrice: null,
+    oldPrice: null,
+    requestedPrice: null,
+    verifiedPrice: null,
     difference: null,
     action: "",
-    dryRun: DRY_RUN,
+    dryRun,
+    writeAttempted: false,
     updated: false,
     warnings: [],
     errors: [],
@@ -249,9 +265,98 @@ function applyPricingResult(result, pricing) {
   }
 }
 
+async function writeSinglePriceIfAllowed({ result, publication, client, dryRun }) {
+  result.oldPrice = publication.oldPrice;
+  result.requestedPrice = publication.requestedPrice;
+
+  if (result.supplierPrice === 0) {
+    result.action = "PRICE_WRITE_BLOCKED";
+    publication.action = "PRICE_WRITE_BLOCKED";
+    publication.reason =
+      "Precio proveedor cero. Requiere revision antes de habilitar escritura real.";
+    result.warnings.push({
+      code: "ZERO_SUPPLIER_PRICE",
+      message:
+        "Precio proveedor cero. No se actualiza Tiendanube hasta revision manual.",
+    });
+    return;
+  }
+
+  if (publication.action !== "PRICE_UPDATE" || dryRun) {
+    return;
+  }
+
+  result.writeAttempted = true;
+  publication.writeAttempted = true;
+
+  try {
+    await updateVariantPrice(
+      publication.productId,
+      publication.variantId,
+      publication.requestedPrice,
+      client,
+    );
+  } catch (error) {
+    result.action = "PRICE_UPDATE_FAILED";
+    publication.action = "PRICE_UPDATE_FAILED";
+    publication.errors.push({
+      code: "PRICE_UPDATE_FAILED",
+      ...serializeError(error),
+    });
+    result.errors.push(...publication.errors);
+    return;
+  }
+
+  let verifiedVariant;
+  try {
+    verifiedVariant = await getProductVariantById(
+      publication.productId,
+      publication.variantId,
+      client,
+    );
+  } catch (error) {
+    result.action = "PRICE_UPDATE_VERIFICATION_FAILED";
+    publication.action = "PRICE_UPDATE_VERIFICATION_FAILED";
+    publication.errors.push({
+      code: "PRICE_UPDATE_VERIFICATION_FAILED",
+      oldPrice: publication.oldPrice,
+      requestedPrice: publication.requestedPrice,
+      verifiedPrice: null,
+      ...serializeError(error),
+    });
+    result.errors.push(...publication.errors);
+    return;
+  }
+
+  const verifiedPrice = parseMoney(verifiedVariant?.price);
+
+  publication.verifiedPrice = verifiedPrice;
+  result.verifiedPrice = verifiedPrice;
+
+  if (moneyEquals(verifiedPrice, publication.requestedPrice)) {
+    publication.action = "PRICE_UPDATED";
+    publication.updated = true;
+    result.action = "PRICE_UPDATED";
+    result.updated = true;
+    return;
+  }
+
+  publication.action = "PRICE_UPDATE_VERIFICATION_FAILED";
+  publication.errors.push({
+    code: "PRICE_UPDATE_VERIFICATION_FAILED",
+    message: "El PUT respondio OK, pero el precio verificado no coincide.",
+    oldPrice: publication.oldPrice,
+    requestedPrice: publication.requestedPrice,
+    verifiedPrice,
+  });
+  result.action = "PRICE_UPDATE_VERIFICATION_FAILED";
+  result.errors.push(...publication.errors);
+}
+
 async function main() {
   const sourceSku = process.argv[2] || process.env.TIENDANUBE_TEST_SKU || "";
-  const result = initResult(sourceSku);
+  const dryRun = isDryRun();
+  const result = initResult(sourceSku, dryRun);
 
   try {
     ensureOutputDir();
@@ -265,10 +370,11 @@ async function main() {
     getTiendanubeConfig();
     const client = createTiendanubeClient();
 
-    console.log("=== POC DRY-RUN DE PRECIOS ===\n");
+    console.log("=== POC DE PRECIOS ===\n");
     console.log("Proteccion:");
-    console.log("- Este comando no ejecuta PUT/POST/DELETE de precios.");
-    console.log("- dryRun forzado: true\n");
+    console.log("- Escritura real habilitable solo para SINGLE seguro.");
+    console.log("- LEGACY_GROUP nunca escribe precios en este POC.");
+    console.log(`- dryRun: ${dryRun}\n`);
     console.log("SKU solicitado:");
     console.log(`- sourceSku: ${sourceSku}`);
     console.log(`- normalizedSku: ${result.normalizedSku}`);
@@ -384,17 +490,37 @@ async function main() {
     if (result.type === "SINGLE") {
       const publication = result.publications[0];
       result.currentPrice = publication.currentPrice;
+      result.oldPrice = publication.oldPrice;
+      result.requestedPrice = publication.requestedPrice;
       result.difference = publication.difference;
       result.action = publication.action;
+      await writeSinglePriceIfAllowed({ result, publication, client, dryRun });
     } else {
       result.action = aggregatePublicationAction(result.publications);
+      if (!dryRun) {
+        result.warnings.push({
+          code: "LEGACY_PRICE_WRITE_DISABLED",
+          message:
+            "La escritura real de precios para LEGACY_GROUP esta deshabilitada en este POC.",
+        });
+        console.log(
+          "- advertencia: LEGACY_PRICE_WRITE_DISABLED. No se escriben precios para LEGACY_GROUP.",
+        );
+      }
     }
 
     console.log("\nDecision:");
     console.log(`- accion calculada: ${result.action}`);
-    console.log("- escritura ejecutada: false");
-    console.log("\nDry Run: true");
-    console.log("No se realizaron escrituras.");
+    console.log(`- escritura intentada: ${result.writeAttempted}`);
+    console.log(`- escritura ejecutada: ${result.updated}`);
+    console.log(`\nDry Run: ${dryRun}`);
+    if (result.updated) {
+      console.log("Precio de variante SINGLE actualizado y verificado.");
+    } else if (result.writeAttempted) {
+      console.log("Se intento escritura, pero no quedo verificada como exitosa.");
+    } else {
+      console.log("No se realizaron escrituras.");
+    }
 
     writeResult(result);
     process.exitCode = result.errors.length > 0 ? 1 : 0;
