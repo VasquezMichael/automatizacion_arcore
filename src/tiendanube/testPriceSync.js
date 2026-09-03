@@ -206,6 +206,8 @@ function analyzePublicationPrice(match, calculatedPrice) {
     action: decision.action,
     reason: decision.reason,
     writeAttempted: false,
+    writeSucceeded: false,
+    verified: false,
     updated: false,
     errors: [],
   };
@@ -241,6 +243,8 @@ function initResult(sourceSku, dryRun) {
     action: "",
     dryRun,
     writeAttempted: false,
+    writeSucceeded: false,
+    verified: false,
     updated: false,
     warnings: [],
     errors: [],
@@ -307,6 +311,9 @@ async function writeSinglePriceIfAllowed({ result, publication, client, dryRun }
     return;
   }
 
+  result.writeSucceeded = true;
+  publication.writeSucceeded = true;
+
   let verifiedVariant;
   try {
     verifiedVariant = await getProductVariantById(
@@ -335,8 +342,10 @@ async function writeSinglePriceIfAllowed({ result, publication, client, dryRun }
 
   if (moneyEquals(verifiedPrice, publication.requestedPrice)) {
     publication.action = "PRICE_UPDATED";
+    publication.verified = true;
     publication.updated = true;
     result.action = "PRICE_UPDATED";
+    result.verified = true;
     result.updated = true;
     return;
   }
@@ -512,12 +521,18 @@ async function main() {
     console.log("\nDecision:");
     console.log(`- accion calculada: ${result.action}`);
     console.log(`- escritura intentada: ${result.writeAttempted}`);
-    console.log(`- escritura ejecutada: ${result.updated}`);
+    console.log(`- PUT exitoso: ${result.writeSucceeded}`);
+    console.log(`- verificacion exitosa: ${result.verified}`);
+    console.log(`- actualizacion confirmada: ${result.updated}`);
     console.log(`\nDry Run: ${dryRun}`);
     if (result.updated) {
       console.log("Precio de variante SINGLE actualizado y verificado.");
+    } else if (result.writeSucceeded) {
+      console.log(
+        "El PUT fue exitoso, pero la actualizacion no quedo verificada como exitosa.",
+      );
     } else if (result.writeAttempted) {
-      console.log("Se intento escritura, pero no quedo verificada como exitosa.");
+      console.log("Se intento escritura, pero el PUT no quedo registrado como exitoso.");
     } else {
       console.log("No se realizaron escrituras.");
     }
@@ -540,7 +555,19 @@ async function main() {
       console.error(JSON.stringify(error.response.data, null, 2));
     }
     console.error("\nNo se imprime el access token por seguridad.");
-    console.error("No se realizaron escrituras.");
+    console.error(`- escritura intentada: ${result.writeAttempted}`);
+    console.error(`- PUT exitoso: ${result.writeSucceeded}`);
+    console.error(`- verificacion exitosa: ${result.verified}`);
+    console.error(`- actualizacion confirmada: ${result.updated}`);
+    if (result.writeSucceeded) {
+      console.error(
+        "Estado conocido: el PUT pudo haber cambiado Tiendanube, pero la ejecucion termino con error.",
+      );
+    } else if (result.writeAttempted) {
+      console.error("Estado conocido: se intento escritura, pero el PUT no fue exitoso.");
+    } else {
+      console.error("No se realizaron escrituras.");
+    }
     process.exitCode = 1;
   }
 }
