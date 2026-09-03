@@ -13,6 +13,7 @@
     "tiendanube:test-status": "node src/tiendanube/testSyncStatus.js",
     "tiendanube:test-image": "node src/tiendanube/testImageSync.js",
     "tiendanube:test-price": "node src/tiendanube/testPriceSync.js",
+    "tiendanube:test-price-aggregate": "node src/tiendanube/testPriceAggregate.js",
     "tiendanube:audit-skus": "node src/tiendanube/auditSkus.js",
     "tiendanube:generate-legacy-sku-groups": "node src/tiendanube/generateLegacySkuGroups.js",
     "pricing:test-rules": "node src/pricing/testPriceCalculator.js",

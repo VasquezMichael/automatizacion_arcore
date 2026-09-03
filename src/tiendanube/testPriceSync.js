@@ -255,17 +255,79 @@ function calculatePublicationCounters(publications) {
 }
 
 function applyAggregateTrace(result) {
-  result.writeAttempted = result.publications.some(
+  const attemptedPublications = result.publications.filter(
     (publication) => publication.writeAttempted,
   );
-  result.writeSucceeded = result.publications.some(
+  const counters = calculatePublicationCounters(result.publications);
+
+  result.writeAttempted = attemptedPublications.length > 0;
+  result.anyWriteSucceeded = result.publications.some(
     (publication) => publication.writeSucceeded,
   );
-  result.verified =
+  result.allWritesSucceeded =
+    attemptedPublications.length > 0 &&
+    attemptedPublications.every((publication) => publication.writeSucceeded);
+  result.allVerified =
     result.publications.length > 0 &&
     result.publications.every((publication) => publication.verified);
-  result.updated = result.publications.some((publication) => publication.updated);
-  Object.assign(result, calculatePublicationCounters(result.publications));
+  result.anyUpdated = result.publications.some((publication) => publication.updated);
+
+  if (result.type === "LEGACY_GROUP") {
+    // LEGACY_GROUP root flags describe the whole group, not partial success.
+    result.writeSucceeded = result.allWritesSucceeded;
+    result.verified = result.allVerified;
+    result.updated = result.allVerified && result.anyUpdated && counters.failedCount === 0;
+  } else {
+    result.writeSucceeded = result.anyWriteSucceeded;
+    result.verified = result.allVerified;
+    result.updated = result.anyUpdated;
+  }
+
+  Object.assign(result, counters);
+}
+
+function printKnownWriteState(result, writer = console.log) {
+  if (result.action === "LEGACY_PRICE_PARTIAL_FAILURE") {
+    writer("El grupo quedo parcialmente sincronizado. Revisar publicaciones fallidas.");
+    return;
+  }
+
+  if (result.action === "PRICE_UPDATED") {
+    writer("Precio de variante actualizado y verificado.");
+    return;
+  }
+
+  if (result.action === "PRICE_NO_CHANGE") {
+    writer("Todas las publicaciones ya coincidian con el precio calculado.");
+    return;
+  }
+
+  if (result.action === "PRICE_UPDATE_FAILED") {
+    writer("Fallo la actualizacion de precio. Revisar detalle de errores.");
+    return;
+  }
+
+  if (result.action === "PRICE_UPDATE_VERIFICATION_FAILED") {
+    writer(
+      "El PUT fue exitoso, pero la verificacion posterior no confirmo el precio solicitado.",
+    );
+    return;
+  }
+
+  if (result.action === "MANUAL_REVIEW") {
+    writer("El resultado requiere revision manual. No se confirma sincronizacion completa.");
+    return;
+  }
+
+  if (result.writeSucceeded) {
+    writer(
+      "El PUT fue exitoso, pero la actualizacion no quedo verificada como exitosa.",
+    );
+  } else if (result.writeAttempted) {
+    writer("Se intento escritura, pero el PUT no quedo registrado como exitoso.");
+  } else {
+    writer("No se realizaron escrituras.");
+  }
 }
 
 function initResult(sourceSku, dryRun) {
@@ -677,18 +739,14 @@ async function main() {
     console.log(`- PUT exitoso: ${result.writeSucceeded}`);
     console.log(`- verificacion exitosa: ${result.verified}`);
     console.log(`- actualizacion confirmada: ${result.updated}`);
-    console.log(`\nDry Run: ${dryRun}`);
-    if (result.updated) {
-      console.log("Precio de variante actualizado y verificado.");
-    } else if (result.writeSucceeded) {
-      console.log(
-        "El PUT fue exitoso, pero la actualizacion no quedo verificada como exitosa.",
-      );
-    } else if (result.writeAttempted) {
-      console.log("Se intento escritura, pero el PUT no quedo registrado como exitoso.");
-    } else {
-      console.log("No se realizaron escrituras.");
+    if (result.type === "LEGACY_GROUP") {
+      console.log(`- algun PUT exitoso: ${result.anyWriteSucceeded}`);
+      console.log(`- todos los PUT intentados exitosos: ${result.allWritesSucceeded}`);
+      console.log(`- todas las publicaciones verificadas: ${result.allVerified}`);
+      console.log(`- alguna publicacion actualizada: ${result.anyUpdated}`);
     }
+    console.log(`\nDry Run: ${dryRun}`);
+    printKnownWriteState(result);
 
     writeResult(result);
     process.exitCode = result.errors.length > 0 ? 1 : 0;
@@ -712,15 +770,7 @@ async function main() {
     console.error(`- PUT exitoso: ${result.writeSucceeded}`);
     console.error(`- verificacion exitosa: ${result.verified}`);
     console.error(`- actualizacion confirmada: ${result.updated}`);
-    if (result.writeSucceeded) {
-      console.error(
-        "Estado conocido: el PUT pudo haber cambiado Tiendanube, pero la ejecucion termino con error.",
-      );
-    } else if (result.writeAttempted) {
-      console.error("Estado conocido: se intento escritura, pero el PUT no fue exitoso.");
-    } else {
-      console.error("No se realizaron escrituras.");
-    }
+    printKnownWriteState(result, console.error);
     process.exitCode = 1;
   }
 }
@@ -730,7 +780,11 @@ if (require.main === module) {
 }
 
 module.exports = {
+  aggregatePublicationAction,
+  applyAggregateTrace,
   analyzePublicationPrice,
+  calculatePublicationCounters,
   decidePriceAction,
   main,
+  printKnownWriteState,
 };
