@@ -207,7 +207,7 @@ function analyzePublicationPrice(match, calculatedPrice) {
     reason: decision.reason,
     writeAttempted: false,
     writeSucceeded: false,
-    verified: false,
+    verified: decision.action === "PRICE_NO_CHANGE",
     updated: false,
     errors: [],
   };
@@ -215,12 +215,57 @@ function analyzePublicationPrice(match, calculatedPrice) {
 
 function aggregatePublicationAction(publications) {
   const actions = publications.map((publication) => publication.action);
+  const updatedCount = publications.filter((publication) => publication.updated).length;
+  const failedCount = publications.filter((publication) =>
+    ["MANUAL_REVIEW", "PRICE_UPDATE_FAILED", "PRICE_UPDATE_VERIFICATION_FAILED"].includes(
+      publication.action,
+    ),
+  ).length;
+
+  if (actions.includes("PRICE_WRITE_BLOCKED")) return "PRICE_WRITE_BLOCKED";
+  if (updatedCount > 0 && failedCount > 0) return "LEGACY_PRICE_PARTIAL_FAILURE";
   if (actions.includes("MANUAL_REVIEW")) return "MANUAL_REVIEW";
   if (actions.includes("PRICE_UPDATE")) return "PRICE_UPDATE";
+  if (actions.includes("PRICE_UPDATE_FAILED")) return "PRICE_UPDATE_FAILED";
+  if (actions.includes("PRICE_UPDATE_VERIFICATION_FAILED")) {
+    return "PRICE_UPDATE_VERIFICATION_FAILED";
+  }
+  if (actions.includes("PRICE_UPDATED")) return "PRICE_UPDATED";
   if (actions.length > 0 && actions.every((action) => action === "PRICE_NO_CHANGE")) {
     return "PRICE_NO_CHANGE";
   }
   return "MANUAL_REVIEW";
+}
+
+function calculatePublicationCounters(publications) {
+  return {
+    totalPublications: publications.length,
+    noChangeCount: publications.filter(
+      (publication) => publication.action === "PRICE_NO_CHANGE",
+    ).length,
+    updatedCount: publications.filter((publication) => publication.updated).length,
+    failedCount: publications.filter((publication) =>
+      [
+        "MANUAL_REVIEW",
+        "PRICE_UPDATE_FAILED",
+        "PRICE_UPDATE_VERIFICATION_FAILED",
+      ].includes(publication.action),
+    ).length,
+  };
+}
+
+function applyAggregateTrace(result) {
+  result.writeAttempted = result.publications.some(
+    (publication) => publication.writeAttempted,
+  );
+  result.writeSucceeded = result.publications.some(
+    (publication) => publication.writeSucceeded,
+  );
+  result.verified =
+    result.publications.length > 0 &&
+    result.publications.every((publication) => publication.verified);
+  result.updated = result.publications.some((publication) => publication.updated);
+  Object.assign(result, calculatePublicationCounters(result.publications));
 }
 
 function initResult(sourceSku, dryRun) {
@@ -246,6 +291,10 @@ function initResult(sourceSku, dryRun) {
     writeSucceeded: false,
     verified: false,
     updated: false,
+    totalPublications: 0,
+    noChangeCount: 0,
+    updatedCount: 0,
+    failedCount: 0,
     warnings: [],
     errors: [],
     publications: [],
@@ -269,6 +318,125 @@ function applyPricingResult(result, pricing) {
   }
 }
 
+async function revalidatePublicationBeforeWrite({
+  publication,
+  expectedNormalizedSku,
+  client,
+}) {
+  let variant;
+  try {
+    variant = await getProductVariantById(
+      publication.productId,
+      publication.variantId,
+      client,
+    );
+  } catch (error) {
+    publication.action = "MANUAL_REVIEW";
+    publication.reason = "No se pudo revalidar la variante antes del PUT.";
+    publication.errors.push({
+      code: "PRICE_WRITE_REVALIDATION_FAILED",
+      productId: publication.productId,
+      variantId: publication.variantId,
+      expectedNormalizedSku,
+      ...serializeError(error),
+    });
+    return false;
+  }
+
+  const actualVariantId = variant?.id;
+  const actualProductId = variant?.product_id || variant?.productId || null;
+  const actualNormalizedSku = normalizeSku(variant?.sku);
+
+  if (
+    !variant ||
+    String(actualVariantId) !== String(publication.variantId) ||
+    (actualProductId !== null && String(actualProductId) !== String(publication.productId)) ||
+    actualNormalizedSku !== expectedNormalizedSku
+  ) {
+    publication.action = "MANUAL_REVIEW";
+    publication.reason = "La variante cambio entre la validacion inicial y el PUT.";
+    publication.errors.push({
+      code: "PRICE_WRITE_REVALIDATION_FAILED",
+      productId: publication.productId,
+      actualProductId,
+      expectedVariantId: publication.variantId,
+      actualVariantId: actualVariantId || null,
+      expectedNormalizedSku,
+      actualNormalizedSku,
+    });
+    return false;
+  }
+
+  return true;
+}
+
+async function writePublicationPrice({ publication, expectedNormalizedSku, client }) {
+  const revalidated = await revalidatePublicationBeforeWrite({
+    publication,
+    expectedNormalizedSku,
+    client,
+  });
+  if (!revalidated) return;
+
+  publication.writeAttempted = true;
+
+  try {
+    await updateVariantPrice(
+      publication.productId,
+      publication.variantId,
+      publication.requestedPrice,
+      client,
+    );
+  } catch (error) {
+    publication.action = "PRICE_UPDATE_FAILED";
+    publication.errors.push({
+      code: "PRICE_UPDATE_FAILED",
+      ...serializeError(error),
+    });
+    return;
+  }
+
+  publication.writeSucceeded = true;
+
+  let verifiedVariant;
+  try {
+    verifiedVariant = await getProductVariantById(
+      publication.productId,
+      publication.variantId,
+      client,
+    );
+  } catch (error) {
+    publication.action = "PRICE_UPDATE_VERIFICATION_FAILED";
+    publication.errors.push({
+      code: "PRICE_UPDATE_VERIFICATION_FAILED",
+      oldPrice: publication.oldPrice,
+      requestedPrice: publication.requestedPrice,
+      verifiedPrice: null,
+      ...serializeError(error),
+    });
+    return;
+  }
+
+  const verifiedPrice = parseMoney(verifiedVariant?.price);
+  publication.verifiedPrice = verifiedPrice;
+
+  if (moneyEquals(verifiedPrice, publication.requestedPrice)) {
+    publication.action = "PRICE_UPDATED";
+    publication.verified = true;
+    publication.updated = true;
+    return;
+  }
+
+  publication.action = "PRICE_UPDATE_VERIFICATION_FAILED";
+  publication.errors.push({
+    code: "PRICE_UPDATE_VERIFICATION_FAILED",
+    message: "El PUT respondio OK, pero el precio verificado no coincide.",
+    oldPrice: publication.oldPrice,
+    requestedPrice: publication.requestedPrice,
+    verifiedPrice,
+  });
+}
+
 async function writeSinglePriceIfAllowed({ result, publication, client, dryRun }) {
   result.oldPrice = publication.oldPrice;
   result.requestedPrice = publication.requestedPrice;
@@ -290,76 +458,69 @@ async function writeSinglePriceIfAllowed({ result, publication, client, dryRun }
     return;
   }
 
-  result.writeAttempted = true;
-  publication.writeAttempted = true;
-
-  try {
-    await updateVariantPrice(
-      publication.productId,
-      publication.variantId,
-      publication.requestedPrice,
-      client,
-    );
-  } catch (error) {
-    result.action = "PRICE_UPDATE_FAILED";
-    publication.action = "PRICE_UPDATE_FAILED";
-    publication.errors.push({
-      code: "PRICE_UPDATE_FAILED",
-      ...serializeError(error),
-    });
-    result.errors.push(...publication.errors);
-    return;
-  }
-
-  result.writeSucceeded = true;
-  publication.writeSucceeded = true;
-
-  let verifiedVariant;
-  try {
-    verifiedVariant = await getProductVariantById(
-      publication.productId,
-      publication.variantId,
-      client,
-    );
-  } catch (error) {
-    result.action = "PRICE_UPDATE_VERIFICATION_FAILED";
-    publication.action = "PRICE_UPDATE_VERIFICATION_FAILED";
-    publication.errors.push({
-      code: "PRICE_UPDATE_VERIFICATION_FAILED",
-      oldPrice: publication.oldPrice,
-      requestedPrice: publication.requestedPrice,
-      verifiedPrice: null,
-      ...serializeError(error),
-    });
-    result.errors.push(...publication.errors);
-    return;
-  }
-
-  const verifiedPrice = parseMoney(verifiedVariant?.price);
-
-  publication.verifiedPrice = verifiedPrice;
-  result.verifiedPrice = verifiedPrice;
-
-  if (moneyEquals(verifiedPrice, publication.requestedPrice)) {
-    publication.action = "PRICE_UPDATED";
-    publication.verified = true;
-    publication.updated = true;
-    result.action = "PRICE_UPDATED";
-    result.verified = true;
-    result.updated = true;
-    return;
-  }
-
-  publication.action = "PRICE_UPDATE_VERIFICATION_FAILED";
-  publication.errors.push({
-    code: "PRICE_UPDATE_VERIFICATION_FAILED",
-    message: "El PUT respondio OK, pero el precio verificado no coincide.",
-    oldPrice: publication.oldPrice,
-    requestedPrice: publication.requestedPrice,
-    verifiedPrice,
+  await writePublicationPrice({
+    publication,
+    expectedNormalizedSku: result.normalizedSku,
+    client,
   });
-  result.action = "PRICE_UPDATE_VERIFICATION_FAILED";
+
+  result.writeAttempted = publication.writeAttempted;
+  result.writeSucceeded = publication.writeSucceeded;
+  result.verified = publication.verified;
+  result.updated = publication.updated;
+  result.verifiedPrice = publication.verifiedPrice;
+  result.action = publication.action;
   result.errors.push(...publication.errors);
+}
+
+function blockZeroPriceWrites(result) {
+  result.action = "PRICE_WRITE_BLOCKED";
+  result.warnings.push({
+    code: "ZERO_SUPPLIER_PRICE",
+    message: "Precio proveedor cero. No se actualiza Tiendanube hasta revision manual.",
+  });
+
+  for (const publication of result.publications) {
+    publication.action = "PRICE_WRITE_BLOCKED";
+    publication.reason =
+      "Precio proveedor cero. Requiere revision antes de habilitar escritura real.";
+    publication.verified = false;
+  }
+
+  result.writeAttempted = false;
+  result.writeSucceeded = false;
+  result.verified = false;
+  result.updated = false;
+}
+
+async function writeLegacyGroupPricesIfAllowed({ result, client, dryRun }) {
+  if (result.supplierPrice === 0) {
+    blockZeroPriceWrites(result);
+    applyAggregateTrace(result);
+    return;
+  }
+
+  if (dryRun) {
+    applyAggregateTrace(result);
+    return;
+  }
+
+  for (const publication of result.publications) {
+    if (publication.action !== "PRICE_UPDATE") continue;
+
+    await writePublicationPrice({
+      publication,
+      expectedNormalizedSku: result.normalizedSku,
+      client,
+    });
+  }
+
+  for (const publication of result.publications) {
+    result.errors.push(...publication.errors);
+  }
+
+  result.action = aggregatePublicationAction(result.publications);
+  applyAggregateTrace(result);
 }
 
 async function main() {
@@ -382,7 +543,7 @@ async function main() {
     console.log("=== POC DE PRECIOS ===\n");
     console.log("Proteccion:");
     console.log("- Escritura real habilitable solo para SINGLE seguro.");
-    console.log("- LEGACY_GROUP nunca escribe precios en este POC.");
+    console.log("- LEGACY_GROUP escribe solo si valida exactamente el registro historico.");
     console.log(`- dryRun: ${dryRun}\n`);
     console.log("SKU solicitado:");
     console.log(`- sourceSku: ${sourceSku}`);
@@ -504,18 +665,10 @@ async function main() {
       result.difference = publication.difference;
       result.action = publication.action;
       await writeSinglePriceIfAllowed({ result, publication, client, dryRun });
+      applyAggregateTrace(result);
     } else {
       result.action = aggregatePublicationAction(result.publications);
-      if (!dryRun) {
-        result.warnings.push({
-          code: "LEGACY_PRICE_WRITE_DISABLED",
-          message:
-            "La escritura real de precios para LEGACY_GROUP esta deshabilitada en este POC.",
-        });
-        console.log(
-          "- advertencia: LEGACY_PRICE_WRITE_DISABLED. No se escriben precios para LEGACY_GROUP.",
-        );
-      }
+      await writeLegacyGroupPricesIfAllowed({ result, client, dryRun });
     }
 
     console.log("\nDecision:");
@@ -526,7 +679,7 @@ async function main() {
     console.log(`- actualizacion confirmada: ${result.updated}`);
     console.log(`\nDry Run: ${dryRun}`);
     if (result.updated) {
-      console.log("Precio de variante SINGLE actualizado y verificado.");
+      console.log("Precio de variante actualizado y verificado.");
     } else if (result.writeSucceeded) {
       console.log(
         "El PUT fue exitoso, pero la actualizacion no quedo verificada como exitosa.",
