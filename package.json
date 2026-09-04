@@ -17,6 +17,7 @@
     "tiendanube:audit-skus": "node src/tiendanube/auditSkus.js",
     "tiendanube:generate-legacy-sku-groups": "node src/tiendanube/generateLegacySkuGroups.js",
     "pricing:test-rules": "node src/pricing/testPriceCalculator.js",
+    "pricing:test-supplier-price": "node src/testSupplierPriceExtraction.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"

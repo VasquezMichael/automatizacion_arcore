@@ -64,6 +64,7 @@ function normalizeProduct(rawProduct) {
     imageHeight: toNumberOrNull(rawProduct.imageHeight),
     observacionesImagen: cleanString(rawProduct.observaciones),
     precio: toNumberOrNull(rawProduct.precio),
+    priceSourceLabel: rawProduct.priceSourceLabel || null,
     categoria: cleanString(rawProduct.categoria),
     subcategoria: cleanString(rawProduct.subcategoria),
     origen: "arcore",

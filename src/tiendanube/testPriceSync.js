@@ -616,6 +616,11 @@ async function main() {
     console.log("\nArcore:");
     console.log(`- matchedCode: ${arcoreProduct.matchedCode || arcoreProduct.codigo}`);
     console.log(`- precio proveedor: ${arcoreProduct.precio}`);
+    console.log(
+      `- etiqueta precio proveedor: ${
+        arcoreProduct.priceSourceLabel || "NO_ENCONTRADO"
+      }`,
+    );
 
     let pricing;
     try {

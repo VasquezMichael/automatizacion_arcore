@@ -44,6 +44,34 @@ function normalizeCode(value) {
     .replace(/\s+/g, "");
 }
 
+function cleanText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function extractSupplierPriceFromText(rawText) {
+  const text = cleanText(rawText);
+  const suPrecio = text.match(/Su precio\s*\$\s*([0-9.,]+)/i);
+  if (suPrecio) {
+    return {
+      precio: cleanText(suPrecio[1]),
+      priceSourceLabel: "SU_PRECIO",
+    };
+  }
+
+  const precioMostrador = text.match(/Precio Mostrador\s*\$\s*([0-9.,]+)/i);
+  if (precioMostrador) {
+    return {
+      precio: cleanText(precioMostrador[1]),
+      priceSourceLabel: "PRECIO_MOSTRADOR",
+    };
+  }
+
+  return {
+    precio: null,
+    priceSourceLabel: null,
+  };
+}
+
 function looksLikeRealImage(value) {
   const src = String(value || "").toLowerCase();
   if (!src) return false;
@@ -179,7 +207,6 @@ async function extractMatchingCard(page, requestedCode) {
         );
         const marca = firstMatch(rawText, /Marca:\s*(.+?)(?=Precio|$)/i);
         const nombre = cleanText(rawText.split(/C[oó]digo:/i)[0]);
-        const precio = firstMatch(rawText, /Su precio\s*\$\s*([0-9.,]+)/i);
         const disponibilidadTexto =
           firstMatch(
             rawText,
@@ -230,7 +257,8 @@ async function extractMatchingCard(page, requestedCode) {
           marcaId: marca,
           marca,
           nombre,
-          precio,
+          precio: null,
+          priceSourceLabel: null,
           disponibilidadTexto,
           rawText,
           image: images[0] || null,
@@ -378,6 +406,7 @@ function buildRawProductFromCard(card, image, observation) {
     marca: card.marca,
     nombre: card.nombre,
     precio: card.precio,
+    priceSourceLabel: card.priceSourceLabel || null,
     disponibilidadTexto: card.disponibilidadTexto,
     imageUrl: image?.src || null,
     imageWidth: image?.width || null,
@@ -426,6 +455,9 @@ async function extractCode(page, code) {
 
   const matchType = match.exactMatch ? "exact" : "closestCandidate";
   const matchedCode = match.card.codigo || "";
+  const supplierPrice = extractSupplierPriceFromText(match.card.rawText);
+  match.card.precio = supplierPrice.precio;
+  match.card.priceSourceLabel = supplierPrice.priceSourceLabel;
   const matchObservation = match.exactMatch
     ? "Coincidencia exacta encontrada."
     : "No se encontro coincidencia exacta. Se utilizo el candidato mas cercano.";
@@ -437,6 +469,11 @@ async function extractCode(page, code) {
       `[${code}] Sin coincidencia exacta. Usando candidato mas cercano: ${matchedCode}.`,
     );
   }
+  console.log(
+    `[${code}] Precio proveedor detectado desde: ${
+      supplierPrice.priceSourceLabel || "NO_ENCONTRADO"
+    }.`,
+  );
 
   let image = match.card.image;
   let imageObservation = image
@@ -475,6 +512,8 @@ async function extractCode(page, code) {
       marcaId: normalized.marcaId,
       marca: normalized.marca,
       nombre: normalized.nombre,
+      precio: normalized.precio,
+      priceSourceLabel: normalized.priceSourceLabel,
       descripcion: normalized.descripcionStock || normalized.nombre,
       descripcionAlternativa: normalized.descripcionAlternativa,
       color: normalized.color,
@@ -586,6 +625,7 @@ if (require.main === module) {
 module.exports = {
   ensureAuthenticatedSession,
   extractCode,
+  extractSupplierPriceFromText,
   looksLikeRealImage,
   main,
   readCodes,
