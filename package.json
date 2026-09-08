@@ -18,6 +18,7 @@
     "tiendanube:generate-legacy-sku-groups": "node src/tiendanube/generateLegacySkuGroups.js",
     "pricing:test-rules": "node src/pricing/testPriceCalculator.js",
     "pricing:test-supplier-price": "node src/testSupplierPriceExtraction.js",
+    "images:test-fingerprint": "node src/tiendanube/testImageFingerprint.js",
     "sync:test": "node src/sync/syncProduct.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
@@ -29,7 +30,8 @@
   "dependencies": {
     "axios": "^1.15.0",
     "dotenv": "^17.4.2",
-    "playwright": "^1.59.1"
+    "playwright": "^1.59.1",
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

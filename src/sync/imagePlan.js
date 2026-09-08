@@ -1,5 +1,9 @@
 const { looksLikeRealImage } = require("../extractByCodesTest");
-const { calculateImageHash } = require("../tiendanube/imageFingerprint");
+const {
+  calculateExactImageHash,
+  compareImageBuffers,
+  downloadImageBuffer,
+} = require("../tiendanube/imageFingerprint");
 
 function pickName(value) {
   if (!value) return "sin nombre";
@@ -39,7 +43,7 @@ async function listProductImages(productId, client) {
   return Array.isArray(response.data) ? response.data : [];
 }
 
-async function planPublicationImage({ match, sourceHash, client }) {
+async function planPublicationImage({ match, sourceBuffer, sourceHash, client }) {
   const publication = {
     productId: match.productId,
     variantId: match.variantId,
@@ -50,6 +54,7 @@ async function planPublicationImage({ match, sourceHash, client }) {
     tiendanubeImageUrl: null,
     sourceHash,
     tiendanubeHash: null,
+    comparison: null,
     action: "",
     warnings: [],
     errors: [],
@@ -75,7 +80,9 @@ async function planPublicationImage({ match, sourceHash, client }) {
     publication.tiendanubeImageUrl = primaryImage.src || null;
 
     try {
-      publication.tiendanubeHash = await calculateImageHash(primaryImage.src);
+      const targetBuffer = await downloadImageBuffer(primaryImage.src);
+      publication.comparison = await compareImageBuffers(sourceBuffer, targetBuffer);
+      publication.tiendanubeHash = publication.comparison.targetExactHash;
     } catch (error) {
       publication.action = "IMAGE_DOWNLOAD_FAILED";
       publication.errors.push(serializeImageError(error));
@@ -83,7 +90,7 @@ async function planPublicationImage({ match, sourceHash, client }) {
     }
 
     publication.action =
-      publication.tiendanubeHash === sourceHash
+      publication.comparison.exactMatch || publication.comparison.perceptualMatch
         ? "IMAGE_NO_CHANGE"
         : "IMAGE_REPLACE";
     return publication;
@@ -134,9 +141,11 @@ async function buildImagePlan({ classification, matches, sourceImageUrl, client 
     };
   }
 
+  let sourceBuffer;
   let sourceHash;
   try {
-    sourceHash = await calculateImageHash(sourceImageUrl, { withArcoreAuth: true });
+    sourceBuffer = await downloadImageBuffer(sourceImageUrl, { withArcoreAuth: true });
+    sourceHash = calculateExactImageHash(sourceBuffer);
   } catch (error) {
     return {
       action: "IMAGE_DOWNLOAD_FAILED",
@@ -161,7 +170,9 @@ async function buildImagePlan({ classification, matches, sourceImageUrl, client 
 
   const publications = [];
   for (const match of matches) {
-    publications.push(await planPublicationImage({ match, sourceHash, client }));
+    publications.push(
+      await planPublicationImage({ match, sourceBuffer, sourceHash, client }),
+    );
   }
 
   return {
