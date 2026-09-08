@@ -13,13 +13,20 @@ const {
   updateVariantPrice,
 } = require("./products");
 const { getLegacySkuGroup } = require("./legacySkuGroups");
+const { validateLegacyGroup } = require("./legacyGroupValidation");
 const { normalizeSku } = require("./sku");
 const {
   calculateSalePrice,
-  moneyDifference,
   moneyEquals,
   parseMoney,
 } = require("../pricing/priceCalculator");
+const {
+  aggregatePublicationAction,
+  analyzePublicationPrice,
+  applyAggregateTrace,
+  calculatePublicationCounters,
+  decidePriceAction,
+} = require("../pricing/priceComparison");
 
 dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
 
@@ -40,12 +47,6 @@ function ensureOutputDir() {
 function writeResult(result) {
   ensureOutputDir();
   fs.writeFileSync(RESULT_FILE, `${JSON.stringify(result, null, 2)}\n`, "utf-8");
-}
-
-function pickName(value) {
-  if (!value) return "sin nombre";
-  if (typeof value === "string") return value;
-  return value.es || value.pt || value.en || JSON.stringify(value);
 }
 
 function serializeError(error) {
@@ -83,207 +84,6 @@ async function getArcoreProduct(sourceSku) {
   } finally {
     await browser.close();
   }
-}
-
-function legacyPairKey(productId, variantId) {
-  return `${productId}:${variantId}`;
-}
-
-function validateLegacyGroup({ group, legacy, currentSkuMatches }) {
-  const issues = [];
-  const expectedMatches = Number(group.expectedMatches) || 0;
-  const productIds = Array.isArray(group.productIds) ? group.productIds : [];
-  const variantIds = Array.isArray(group.variantIds) ? group.variantIds : [];
-  const registeredPairs = new Set(
-    productIds.map((productId, index) => legacyPairKey(productId, variantIds[index])),
-  );
-  const actualPairs = new Set(
-    currentSkuMatches.matches.map((match) =>
-      legacyPairKey(match.productId, match.variantId),
-    ),
-  );
-
-  if (productIds.length !== expectedMatches) {
-    issues.push({
-      code: "LEGACY_PRODUCT_IDS_COUNT_MISMATCH",
-      expectedMatches,
-      productIdsCount: productIds.length,
-    });
-  }
-
-  if (variantIds.length !== expectedMatches) {
-    issues.push({
-      code: "LEGACY_VARIANT_IDS_COUNT_MISMATCH",
-      expectedMatches,
-      variantIdsCount: variantIds.length,
-    });
-  }
-
-  if (currentSkuMatches.matches.length !== expectedMatches) {
-    issues.push({
-      code: "LEGACY_ACTUAL_MATCHES_MISMATCH",
-      expectedMatches,
-      actualMatches: currentSkuMatches.matches.length,
-    });
-  }
-
-  if (legacy.missing.length > 0) {
-    issues.push({
-      code: "LEGACY_GROUP_MISSING_PRODUCT",
-      missing: legacy.missing,
-    });
-  }
-
-  for (const pair of registeredPairs) {
-    if (!actualPairs.has(pair)) {
-      issues.push({
-        code: "LEGACY_REGISTERED_PAIR_NOT_IN_CURRENT_MATCHES",
-        pair,
-      });
-    }
-  }
-
-  for (const pair of actualPairs) {
-    if (!registeredPairs.has(pair)) {
-      issues.push({
-        code: "LEGACY_CURRENT_MATCH_NOT_REGISTERED",
-        pair,
-      });
-    }
-  }
-
-  return {
-    ok: issues.length === 0,
-    issues,
-    expectedMatches,
-    actualMatches: currentSkuMatches.matches.length,
-    registeredProductIdsCount: productIds.length,
-    registeredVariantIdsCount: variantIds.length,
-  };
-}
-
-function decidePriceAction({ calculatedPrice, currentPrice }) {
-  if (currentPrice === null) {
-    return {
-      action: "MANUAL_REVIEW",
-      difference: null,
-      reason: "Tiendanube no devolvio un precio utilizable para comparar.",
-    };
-  }
-
-  const difference = moneyDifference(calculatedPrice, currentPrice);
-  if (moneyEquals(calculatedPrice, currentPrice)) {
-    return {
-      action: "PRICE_NO_CHANGE",
-      difference,
-      reason: "El precio actual coincide normalizado a 2 decimales.",
-    };
-  }
-
-  return {
-    action: "PRICE_UPDATE",
-    difference,
-    reason: "El precio actual difiere del precio calculado.",
-  };
-}
-
-function analyzePublicationPrice(match, calculatedPrice) {
-  const currentPrice = parseMoney(match.price);
-  const decision = decidePriceAction({ calculatedPrice, currentPrice });
-
-  return {
-    productId: match.productId,
-    variantId: match.variantId,
-    sku: match.sku,
-    name: pickName(match.name),
-    published: match.published,
-    currentPrice,
-    rawCurrentPrice: match.price,
-    oldPrice: currentPrice,
-    requestedPrice: calculatedPrice,
-    verifiedPrice: null,
-    difference: decision.difference,
-    action: decision.action,
-    reason: decision.reason,
-    writeAttempted: false,
-    writeSucceeded: false,
-    verified: decision.action === "PRICE_NO_CHANGE",
-    updated: false,
-    errors: [],
-  };
-}
-
-function aggregatePublicationAction(publications) {
-  const actions = publications.map((publication) => publication.action);
-  const updatedCount = publications.filter((publication) => publication.updated).length;
-  const failedCount = publications.filter((publication) =>
-    ["MANUAL_REVIEW", "PRICE_UPDATE_FAILED", "PRICE_UPDATE_VERIFICATION_FAILED"].includes(
-      publication.action,
-    ),
-  ).length;
-
-  if (actions.includes("PRICE_WRITE_BLOCKED")) return "PRICE_WRITE_BLOCKED";
-  if (updatedCount > 0 && failedCount > 0) return "LEGACY_PRICE_PARTIAL_FAILURE";
-  if (actions.includes("MANUAL_REVIEW")) return "MANUAL_REVIEW";
-  if (actions.includes("PRICE_UPDATE")) return "PRICE_UPDATE";
-  if (actions.includes("PRICE_UPDATE_FAILED")) return "PRICE_UPDATE_FAILED";
-  if (actions.includes("PRICE_UPDATE_VERIFICATION_FAILED")) {
-    return "PRICE_UPDATE_VERIFICATION_FAILED";
-  }
-  if (actions.includes("PRICE_UPDATED")) return "PRICE_UPDATED";
-  if (actions.length > 0 && actions.every((action) => action === "PRICE_NO_CHANGE")) {
-    return "PRICE_NO_CHANGE";
-  }
-  return "MANUAL_REVIEW";
-}
-
-function calculatePublicationCounters(publications) {
-  return {
-    totalPublications: publications.length,
-    noChangeCount: publications.filter(
-      (publication) => publication.action === "PRICE_NO_CHANGE",
-    ).length,
-    updatedCount: publications.filter((publication) => publication.updated).length,
-    failedCount: publications.filter((publication) =>
-      [
-        "MANUAL_REVIEW",
-        "PRICE_UPDATE_FAILED",
-        "PRICE_UPDATE_VERIFICATION_FAILED",
-      ].includes(publication.action),
-    ).length,
-  };
-}
-
-function applyAggregateTrace(result) {
-  const attemptedPublications = result.publications.filter(
-    (publication) => publication.writeAttempted,
-  );
-  const counters = calculatePublicationCounters(result.publications);
-
-  result.writeAttempted = attemptedPublications.length > 0;
-  result.anyWriteSucceeded = result.publications.some(
-    (publication) => publication.writeSucceeded,
-  );
-  result.allWritesSucceeded =
-    attemptedPublications.length > 0 &&
-    attemptedPublications.every((publication) => publication.writeSucceeded);
-  result.allVerified =
-    result.publications.length > 0 &&
-    result.publications.every((publication) => publication.verified);
-  result.anyUpdated = result.publications.some((publication) => publication.updated);
-
-  if (result.type === "LEGACY_GROUP") {
-    // LEGACY_GROUP root flags describe the whole group, not partial success.
-    result.writeSucceeded = result.allWritesSucceeded;
-    result.verified = result.allVerified;
-    result.updated = result.allVerified && result.anyUpdated && counters.failedCount === 0;
-  } else {
-    result.writeSucceeded = result.anyWriteSucceeded;
-    result.verified = result.allVerified;
-    result.updated = result.anyUpdated;
-  }
-
-  Object.assign(result, counters);
 }
 
 function printKnownWriteState(result, writer = console.log) {
