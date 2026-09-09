@@ -35,6 +35,12 @@ function actionBase(type, planned, current) {
     currentState: null,
     desiredState: null,
     simulationResult: null,
+    executionResult: null,
+    writeAttempted: false,
+    writeSucceeded: false,
+    verified: false,
+    updated: false,
+    errors: [],
   };
 }
 
@@ -291,7 +297,7 @@ function summarizeActions(actions, blocked) {
   );
   const wouldResults = new Set(["WOULD_CREATE", "WOULD_REPLACE", "WOULD_UPDATE"]);
   const wouldWrite = domainActions.filter((action) =>
-    wouldResults.has(action.simulationResult),
+    wouldResults.has(action.simulationResult) && !action.writeAttempted,
   ).length;
   const skippedAlreadyApplied = domainActions.filter(
     (action) => action.simulationResult === "SKIPPED_ALREADY_APPLIED",
@@ -302,13 +308,26 @@ function summarizeActions(actions, blocked) {
     ),
   ).length;
   const failedActions = domainActions.filter(
-    (action) => action.simulationResult === "FAILED",
+    (action) =>
+      action.simulationResult === "FAILED" ||
+      action.executionResult === "WRITE_FAILED",
   ).length;
+  const verificationFailedActions = domainActions.filter(
+    (action) => action.executionResult === "WRITE_VERIFICATION_FAILED",
+  ).length;
+  const successfulWrites = domainActions.filter(
+    (action) => action.executionResult === "WRITE_SUCCEEDED",
+  ).length;
+  const writeActions = domainActions.filter((action) => action.writeAttempted);
+  const updatedActions = domainActions.filter((action) => action.updated).length;
 
-  // SUCCESS y PARTIAL_FAILURE quedan reservados para el executor con writes.
   let executionStatus = ExecutionStatus.NO_CHANGES;
   if (blocked) executionStatus = ExecutionStatus.BLOCKED;
+  else if (verificationFailedActions > 0) {
+    executionStatus = ExecutionStatus.PARTIAL_FAILURE;
+  }
   else if (failedActions > 0) executionStatus = ExecutionStatus.FAILED;
+  else if (successfulWrites > 0) executionStatus = ExecutionStatus.SUCCESS;
   else if (blockedActions > 0) {
     executionStatus = ExecutionStatus.SIMULATED_WITH_BLOCKS;
   }
@@ -320,11 +339,14 @@ function summarizeActions(actions, blocked) {
     wouldWrite,
     skippedAlreadyApplied,
     blockedActions,
-    failedActions,
-    writeAttempted: false,
-    writeSucceeded: false,
-    verified: false,
-    updated: false,
+    failedActions: failedActions + verificationFailedActions,
+    successfulWrites,
+    writeAttempted: writeActions.length > 0,
+    writeSucceeded:
+      writeActions.length > 0 && writeActions.every((action) => action.writeSucceeded),
+    verified:
+      writeActions.length > 0 && writeActions.every((action) => action.verified),
+    updated: updatedActions > 0,
   };
 }
 

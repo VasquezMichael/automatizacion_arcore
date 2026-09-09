@@ -133,7 +133,7 @@ function successfulRevalidation(plan, planOverrides = {}) {
   };
 }
 
-async function runControlled(plan, revalidation) {
+async function runControlled(plan, revalidation, options = {}) {
   let clientAccessed = false;
   const client = new Proxy(
     {},
@@ -146,20 +146,17 @@ async function runControlled(plan, revalidation) {
   );
   const result = await executeSyncPlan(plan.sourceSku, {
     client,
-    env: {
-      TIENDANUBE_DRY_RUN: "false",
-      TIENDANUBE_EXECUTION_ENABLED: "true",
+    env: options.env || {
+      TIENDANUBE_DRY_RUN: "true",
+      TIENDANUBE_EXECUTION_ENABLED: "false",
     },
     now: new Date("2026-09-09T12:00:00.000Z"),
     persist: false,
     syncProduct: async () => clone(plan),
     revalidateSyncPlan: async () => clone(revalidation),
+    ...(options.priceAdapter ? { priceAdapter: options.priceAdapter } : {}),
   });
   assert.equal(clientAccessed, false);
-  assert.equal(result.writeOperationsAvailable, false);
-  assert.equal(result.effectiveDryRun, true);
-  assert.equal(result.result.writeAttempted, false);
-  assert(result.warnings.some((warning) => warning.code === "EXECUTION_NOT_IMPLEMENTED"));
   return result;
 }
 
@@ -530,7 +527,7 @@ async function main() {
   await testChangedState();
   testPersistenceSanitizer();
   await testSkuRevalidationPagination();
-  console.log("Resultado: OK. Executor estructuralmente simulado.");
+  console.log("Resultado: OK. Executor seguro con writes deshabilitados por defecto.");
 }
 
 if (require.main === module) {
@@ -540,4 +537,12 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main };
+module.exports = {
+  basePlan,
+  clone,
+  createPlan,
+  main,
+  match,
+  runControlled,
+  successfulRevalidation,
+};
