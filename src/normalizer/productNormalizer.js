@@ -23,6 +23,7 @@ function buildExternalId({ codigo, marcaId, marca }) {
 
 function normalizeProduct(rawProduct) {
   const stock = rawProduct.stock || {};
+  const stockDiagnostics = rawProduct.stockDiagnostics || {};
   const codigo = cleanString(rawProduct.codigo || stock.codigo);
   const searchedCode = cleanString(rawProduct.searchedCode || codigo);
   const matchedCode = cleanString(rawProduct.matchedCode || codigo);
@@ -58,6 +59,23 @@ function normalizeProduct(rawProduct) {
       descripcionAlternativa,
       color,
     }),
+    availabilitySource: {
+      source: rawProduct.stock ? "ARCORE_STOCK_API" : "ARCORE_LISTING",
+      url: stockDiagnostics.url || null,
+      httpStatus: stockDiagnostics.httpStatus || null,
+      codigo: stockDiagnostics.codigo || rawProduct.stockCodigo || null,
+      marcaId: stockDiagnostics.marcaId || marcaId || null,
+      supermedida: stockDiagnostics.supermedida || rawProduct.supermedida || null,
+      descripcion: stock.descripcion || rawProduct.disponibilidadTexto || null,
+      descripcionAlternativa: stock.descripcionAlternativa || null,
+      color: stock.color || null,
+      notificationVisible:
+        typeof stock.notificationVisible === "boolean"
+          ? stock.notificationVisible
+          : null,
+      response: stockDiagnostics.response || null,
+      error: rawProduct.stockError || null,
+    },
     imageUrl: rawProduct.imageUrl || null,
     imageSource: cleanString(rawProduct.imageFuente || rawProduct.imageSource),
     imageWidth: toNumberOrNull(rawProduct.imageWidth),

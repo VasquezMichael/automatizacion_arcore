@@ -18,6 +18,7 @@
     "tiendanube:generate-legacy-sku-groups": "node src/tiendanube/generateLegacySkuGroups.js",
     "pricing:test-rules": "node src/pricing/testPriceCalculator.js",
     "pricing:test-supplier-price": "node src/testSupplierPriceExtraction.js",
+    "availability:test": "node src/classifier/testAvailability.js",
     "images:test-fingerprint": "node src/tiendanube/testImageFingerprint.js",
     "sync:test": "node src/sync/syncProduct.js",
     "sync:prepare": "node src/syncPrepare.js",

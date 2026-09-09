@@ -4,7 +4,7 @@ const { chromium } = require("playwright");
 const { baseUrl, testSupermedida } = require("./config");
 const { login } = require("./login");
 const { loadStorageState, storageStateExists } = require("./session");
-const { queryStock } = require("./stockClient");
+const { queryStockDetailed } = require("./stockClient");
 const { normalizeProduct } = require("./normalizer/productNormalizer");
 
 const INPUT_FILE = path.resolve(__dirname, "..", "input", "test-codes.json");
@@ -158,6 +158,49 @@ async function searchCode(page, code) {
   return {
     searched: true,
     observation: "Busqueda ejecutada desde el buscador del portal.",
+  };
+}
+
+async function fetchArticleMetadata(page, searchedCode, matchedCode) {
+  const endpoint = `${baseUrl}/api/articulos`;
+  const response = await page.request.get(endpoint, {
+    params: {
+      query: searchedCode,
+      page: 0,
+    },
+  });
+  const status = response.status();
+  const url = response.url();
+
+  if (!response.ok()) {
+    return {
+      article: null,
+      diagnostics: {
+        url,
+        httpStatus: status,
+        error: `GET /api/articulos fallo con status HTTP ${status}.`,
+      },
+    };
+  }
+
+  const payload = await response.json();
+  const articles = Array.isArray(payload?.data) ? payload.data : [];
+  const normalizedMatchedCode = normalizeCode(matchedCode);
+  const article =
+    articles.find(
+      (candidate) => normalizeCode(candidate.codComercial) === normalizedMatchedCode,
+    ) || null;
+
+  return {
+    article,
+    diagnostics: {
+      url,
+      httpStatus: status,
+      candidates: articles.length,
+      error: article
+        ? null
+        : `No se encontro metadata exacta para codComercial ${matchedCode}.`,
+    },
   };
 }
 
@@ -374,26 +417,47 @@ async function tryOpenDetailAndExtractImage(page, code) {
 }
 
 async function queryStockIfPossible(rawProduct) {
-  if (!rawProduct.codigo || !rawProduct.marcaId) {
+  const stockCodigo = rawProduct.stockCodigo || rawProduct.codigo;
+  const marcaId = rawProduct.marcaId;
+  const supermedida = rawProduct.supermedida ?? testSupermedida ?? "";
+
+  if (!stockCodigo || !marcaId) {
     return {
       stock: null,
       stockError: "No se consulto stock: falta codigo o marcaId/marca.",
+      stockDiagnostics: {
+        codigo: stockCodigo || null,
+        marcaId: marcaId || null,
+        supermedida,
+        httpStatus: null,
+        response: null,
+      },
     };
   }
 
   try {
+    const result = await queryStockDetailed({
+      codigo: stockCodigo,
+      marcaId,
+      supermedida,
+    });
     return {
-      stock: await queryStock({
-        codigo: rawProduct.codigo,
-        marcaId: rawProduct.marcaId,
-        supermedida: testSupermedida || "",
-      }),
+      stock: result.data,
       stockError: null,
+      stockDiagnostics: result.diagnostics,
     };
   } catch (error) {
     return {
       stock: null,
       stockError: error.message,
+      stockDiagnostics:
+        error.diagnostics || {
+          codigo: stockCodigo,
+          marcaId,
+          supermedida,
+          httpStatus: error.response?.status || null,
+          response: error.response?.data || null,
+        },
     };
   }
 }
@@ -495,8 +559,22 @@ async function extractCode(page, code) {
   rawProduct.matchedCode = matchedCode;
   rawProduct.matchType = matchType;
   rawProduct.matchObservation = matchObservation;
-  const { stock, stockError } = await queryStockIfPossible(rawProduct);
+  const articleLookup = await fetchArticleMetadata(page, code, matchedCode);
+  rawProduct.articleLookup = articleLookup.diagnostics;
+  if (articleLookup.article) {
+    rawProduct.articleId = articleLookup.article.id || null;
+    rawProduct.stockCodigo = articleLookup.article.codigo || null;
+    rawProduct.codComercial = articleLookup.article.codComercial || matchedCode;
+    rawProduct.marcaId = articleLookup.article.marcaId || rawProduct.marcaId;
+    rawProduct.marca = articleLookup.article.marca || rawProduct.marca;
+    rawProduct.supermedida = articleLookup.article.supermedida ?? null;
+    rawProduct.articleMetadata = articleLookup.article;
+  }
+
+  const { stock, stockError, stockDiagnostics } =
+    await queryStockIfPossible(rawProduct);
   rawProduct.stock = stock;
+  rawProduct.stockDiagnostics = stockDiagnostics;
   if (stockError) rawProduct.stockError = stockError;
 
   const normalized = normalizeProduct(rawProduct);
@@ -626,6 +704,7 @@ module.exports = {
   ensureAuthenticatedSession,
   extractCode,
   extractSupplierPriceFromText,
+  fetchArticleMetadata,
   looksLikeRealImage,
   main,
   readCodes,

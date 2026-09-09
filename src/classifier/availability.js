@@ -20,6 +20,15 @@ function classifyAvailability({ descripcion, descripcionAlternativa, color }) {
 
   if (!text) return AvailabilityStatus.UNKNOWN;
 
+  const explicitPartialTerms = [
+    "hay alternativa disponible con espera",
+    "disponible c/espera",
+    "disponible con espera",
+  ];
+  if (explicitPartialTerms.some((term) => text.includes(term))) {
+    return AvailabilityStatus.PARTIAL;
+  }
+
   const unavailableTerms = [
     "sin stock",
     "no disponible",

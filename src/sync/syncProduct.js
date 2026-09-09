@@ -194,6 +194,12 @@ function printResult(result) {
 
   console.log("\nProveedor:");
   console.log(`- disponibilidad: ${result.supplier.availability}`);
+  console.log(
+    `- fuente disponibilidad: ${result.supplier.availabilitySource?.source || "NO_ENCONTRADA"}`,
+  );
+  console.log(
+    `- status stock HTTP: ${result.supplier.availabilitySource?.httpStatus ?? "N/A"}`,
+  );
   console.log(`- precio: ${result.supplier.supplierPrice}`);
   console.log(`- fuente precio: ${result.supplier.priceSourceLabel || "NO_ENCONTRADO"}`);
   console.log(`- imagen: ${result.supplier.imageUrl || "SIN_IMAGEN"}`);
@@ -262,6 +268,7 @@ async function syncProduct(sourceSku, dependencies = {}) {
     matchedCode: result.matchedCode,
     matchType: result.matchType,
     availability: supplierProduct.estadoDisponibilidad,
+    availabilitySource: supplierProduct.availabilitySource || null,
     supplierPrice: supplierProduct.precio,
     priceSourceLabel: supplierProduct.priceSourceLabel || null,
     imageUrl: supplierProduct.imageUrl || null,
