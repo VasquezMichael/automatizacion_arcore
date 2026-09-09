@@ -16,7 +16,17 @@ async function extractArcoreProduct(sourceSku) {
     const extraction = await extractCode(page, sourceSku);
     if (!extraction.found) {
       const error = new Error(`No se encontro producto en Arcore para SKU ${sourceSku}.`);
-      error.code = "ARCORE_PRODUCT_NOT_FOUND";
+      error.code =
+        extraction.supplierResolution?.type === "AMBIGUOUS"
+          ? "ARCORE_PRODUCT_AMBIGUOUS"
+          : "ARCORE_PRODUCT_NOT_FOUND";
+      error.supplierResolution = extraction.supplierResolution || {
+        type: "NOT_FOUND",
+        sourceCode: sourceSku,
+        matchedCode: null,
+        rule: null,
+        candidates: [],
+      };
       error.details = extraction;
       throw error;
     }

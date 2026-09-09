@@ -46,6 +46,7 @@ function normalizeProduct(rawProduct) {
     searchedCode,
     matchedCode,
     matchType,
+    supplierResolution: rawProduct.supplierResolution || null,
     codigo,
     marcaId,
     marca,

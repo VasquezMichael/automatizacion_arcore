@@ -6,6 +6,11 @@ const { login } = require("./login");
 const { loadStorageState, storageStateExists } = require("./session");
 const { queryStockDetailed } = require("./stockClient");
 const { normalizeProduct } = require("./normalizer/productNormalizer");
+const {
+  SupplierResolutionType,
+  isAutomaticSupplierResolution,
+  resolveArcoreCode,
+} = require("./extractor/arcoreCodeResolver");
 
 const INPUT_FILE = path.resolve(__dirname, "..", "input", "test-codes.json");
 const OUTPUT_DIR = path.resolve(__dirname, "..", "output");
@@ -161,61 +166,82 @@ async function searchCode(page, code) {
   };
 }
 
-async function fetchArticleMetadata(page, searchedCode, matchedCode) {
+async function fetchArticleMetadata(page, searchedCode) {
   const endpoint = `${baseUrl}/api/articulos`;
-  const response = await page.request.get(endpoint, {
-    params: {
-      query: searchedCode,
-      page: 0,
-    },
-  });
-  const status = response.status();
-  const url = response.url();
+  async function fetchPage(pageNumber) {
+    const response = await page.request.get(endpoint, {
+      params: {
+        query: searchedCode,
+        page: pageNumber,
+      },
+    });
+    return {
+      ok: response.ok(),
+      status: response.status(),
+      url: response.url(),
+      payload: response.ok() ? await response.json() : null,
+    };
+  }
 
-  if (!response.ok()) {
+  const firstPage = await fetchPage(0);
+  if (!firstPage.ok) {
     return {
       article: null,
+      resolution: null,
       diagnostics: {
-        url,
-        httpStatus: status,
-        error: `GET /api/articulos fallo con status HTTP ${status}.`,
+        url: firstPage.url,
+        httpStatus: firstPage.status,
+        error: `GET /api/articulos fallo con status HTTP ${firstPage.status}.`,
       },
     };
   }
 
-  const payload = await response.json();
-  const articles = Array.isArray(payload?.data) ? payload.data : [];
-  const normalizedMatchedCode = normalizeCode(matchedCode);
-  const article =
-    articles.find(
-      (candidate) => normalizeCode(candidate.codComercial) === normalizedMatchedCode,
-    ) || null;
+  const totalPages = Math.max(Number(firstPage.payload?.pages) || 1, 1);
+  const remainingPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) => fetchPage(index + 1)),
+  );
+  const pageResults = [firstPage, ...remainingPages];
+  const failedPage = pageResults.find((result) => !result.ok);
+  if (failedPage) {
+    return {
+      article: null,
+      resolution: null,
+      diagnostics: {
+        url: failedPage.url,
+        httpStatus: failedPage.status,
+        pages: totalPages,
+        error: `GET /api/articulos fallo con status HTTP ${failedPage.status}.`,
+      },
+    };
+  }
+
+  const articles = pageResults.flatMap((result) =>
+    Array.isArray(result.payload?.data) ? result.payload.data : [],
+  );
+  const resolution = resolveArcoreCode(searchedCode, articles);
+  const article = isAutomaticSupplierResolution(resolution)
+    ? articles[resolution.matchedCandidateIndex] || null
+    : null;
 
   return {
     article,
+    resolution,
     diagnostics: {
-      url,
-      httpStatus: status,
+      url: firstPage.url,
+      httpStatus: firstPage.status,
+      pages: totalPages,
       candidates: articles.length,
-      error: article
-        ? null
-        : `No se encontro metadata exacta para codComercial ${matchedCode}.`,
+      candidateCodes: articles.map((candidate) => candidate.codComercial).filter(Boolean),
+      error: article ? null : `Resolucion Arcore: ${resolution.type}.`,
     },
   };
 }
 
 async function extractMatchingCard(page, requestedCode) {
-  return page.evaluate(
-    ({ requestedCode, normalizedRequestedCode }) => {
+  const cards = await page.evaluate(
+    () => {
       function cleanText(value) {
         return String(value || "").replace(/\s+/g, " ").trim();
-      }
-
-      function normalizeCode(value) {
-        return String(value || "")
-          .trim()
-          .toLowerCase()
-          .replace(/\s+/g, "");
       }
 
       function firstMatch(text, regex) {
@@ -305,8 +331,6 @@ async function extractMatchingCard(page, requestedCode) {
           disponibilidadTexto,
           rawText,
           image: images[0] || null,
-          exactMatch: normalizeCode(codigo) === normalizedRequestedCode,
-          containsRequestedCode: normalizeCode(rawText).includes(normalizedRequestedCode),
         };
       }
 
@@ -316,39 +340,32 @@ async function extractMatchingCard(page, requestedCode) {
         ),
       ).map(extractCard);
 
-      const exact = cards.find((card) => card.exactMatch);
-      if (exact) {
-        return {
-          found: true,
-          exactMatch: true,
-          card: exact,
-          totalCandidates: cards.length,
-        };
-      }
-
-      const partial = cards.find((card) => card.containsRequestedCode);
-      if (partial) {
-        return {
-          found: true,
-          exactMatch: false,
-          card: partial,
-          matchType: "closestCandidate",
-          totalCandidates: cards.length,
-          observation:
-            "No se encontro coincidencia exacta. Se utilizo el candidato mas cercano.",
-        };
-      }
-
-      return {
-        found: false,
-        exactMatch: false,
-        matchType: null,
-        totalCandidates: cards.length,
-        observation: `No se encontro coincidencia exacta para ${requestedCode}.`,
-      };
+      return cards;
     },
-    { requestedCode, normalizedRequestedCode: normalizeCode(requestedCode) },
   );
+
+  const resolution = resolveArcoreCode(requestedCode, cards);
+  if (!isAutomaticSupplierResolution(resolution)) {
+    return {
+      found: false,
+      resolution,
+      totalCandidates: cards.length,
+      observation: `Resolucion Arcore desde DOM: ${resolution.type}.`,
+    };
+  }
+
+  const card = cards.find(
+    (candidate) => normalizeCode(candidate.codigo) === normalizeCode(resolution.matchedCode),
+  );
+  return {
+    found: Boolean(card),
+    resolution,
+    card: card || null,
+    totalCandidates: cards.length,
+    observation: card
+      ? `Resolucion Arcore desde DOM: ${resolution.type}.`
+      : "El codigo fue resuelto, pero no se encontro su tarjeta exacta.",
+  };
 }
 
 async function tryOpenDetailAndExtractImage(page, code) {
@@ -496,41 +513,65 @@ async function extractCode(page, code) {
     };
   }
 
-  let match = await extractMatchingCard(page, code);
-  if (!match.found && /\s/.test(code)) {
-    const compactCode = code.replace(/\s+/g, "");
-    console.log(
-      `[${code}] Sin coincidencia exacta. Reintentando busqueda como ${compactCode}...`,
-    );
-    await searchCode(page, compactCode);
-    match = await extractMatchingCard(page, code);
+  const articleLookup = await fetchArticleMetadata(page, code);
+  let supplierResolution = articleLookup.resolution;
+
+  if (supplierResolution && !isAutomaticSupplierResolution(supplierResolution)) {
+    console.log(`[${code}] Resolucion bloqueada: ${supplierResolution.type}.`);
+    return {
+      found: false,
+      code,
+      observation: `Resolucion Arcore estructurada: ${supplierResolution.type}.`,
+      totalCandidates: articleLookup.diagnostics.candidates || 0,
+      supplierResolution,
+    };
   }
 
-  if (!match.found) {
-    console.log(`[${code}] No encontrado: ${match.observation}`);
+  let match;
+  if (isAutomaticSupplierResolution(supplierResolution)) {
+    match = await extractMatchingCard(page, supplierResolution.matchedCode);
+    if (!match.found) {
+      await searchCode(page, supplierResolution.matchedCode);
+      match = await extractMatchingCard(page, supplierResolution.matchedCode);
+    }
+  } else {
+    match = await extractMatchingCard(page, code);
+    supplierResolution = match.resolution;
+  }
+
+  if (!match.found || !isAutomaticSupplierResolution(supplierResolution)) {
+    const resolution = supplierResolution || {
+      type: SupplierResolutionType.NOT_FOUND,
+      sourceCode: normalizeCode(code),
+      matchedCode: null,
+      rule: null,
+      candidates: [],
+    };
+    console.log(`[${code}] Resolucion bloqueada: ${resolution.type}.`);
     return {
       found: false,
       code,
       observation: match.observation,
       totalCandidates: match.totalCandidates,
-      closestCandidate: match.closestCandidate || null,
+      supplierResolution: resolution,
     };
   }
 
-  const matchType = match.exactMatch ? "exact" : "closestCandidate";
-  const matchedCode = match.card.codigo || "";
+  const matchType = supplierResolution.type;
+  const matchedCode = supplierResolution.matchedCode;
   const supplierPrice = extractSupplierPriceFromText(match.card.rawText);
   match.card.precio = supplierPrice.precio;
   match.card.priceSourceLabel = supplierPrice.priceSourceLabel;
-  const matchObservation = match.exactMatch
-    ? "Coincidencia exacta encontrada."
-    : "No se encontro coincidencia exacta. Se utilizo el candidato mas cercano.";
+  const matchObservation =
+    supplierResolution.type === SupplierResolutionType.EXACT
+      ? "Coincidencia exacta encontrada."
+      : "Transformacion segura aplicada: se agrego un unico cero final.";
 
-  if (match.exactMatch) {
+  if (supplierResolution.type === SupplierResolutionType.EXACT) {
     console.log(`[${code}] Coincidencia exacta encontrada: ${matchedCode}.`);
   } else {
     console.log(
-      `[${code}] Sin coincidencia exacta. Usando candidato mas cercano: ${matchedCode}.`,
+      `[${code}] SAFE_TRANSFORM APPEND_TRAILING_ZERO: ${matchedCode}.`,
     );
   }
   console.log(
@@ -559,7 +600,13 @@ async function extractCode(page, code) {
   rawProduct.matchedCode = matchedCode;
   rawProduct.matchType = matchType;
   rawProduct.matchObservation = matchObservation;
-  const articleLookup = await fetchArticleMetadata(page, code, matchedCode);
+  rawProduct.supplierResolution = {
+    type: supplierResolution.type,
+    sourceCode: supplierResolution.sourceCode,
+    matchedCode: supplierResolution.matchedCode,
+    rule: supplierResolution.rule,
+    candidates: supplierResolution.candidates,
+  };
   rawProduct.articleLookup = articleLookup.diagnostics;
   if (articleLookup.article) {
     rawProduct.articleId = articleLookup.article.id || null;
@@ -585,6 +632,7 @@ async function extractCode(page, code) {
       searchedCode: code,
       matchedCode,
       matchType,
+      supplierResolution: rawProduct.supplierResolution,
       observacion: matchObservation,
       codigo: normalized.codigo,
       marcaId: normalized.marcaId,
@@ -638,7 +686,7 @@ async function main() {
               codigo: code,
               observacion: result.observation,
               totalCandidates: result.totalCandidates || 0,
-              closestCandidate: result.closestCandidate || null,
+              supplierResolution: result.supplierResolution || null,
             });
           }
         } catch (error) {

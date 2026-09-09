@@ -132,12 +132,13 @@ function addPlanMessages(result) {
   result.errors.push(...(result.plans.price.errors || []));
   result.errors.push(...(result.plans.image.errors || []));
 
-  if (result.supplier.matchType === "closestCandidate") {
+  if (result.supplierResolution?.type === "SAFE_TRANSFORM") {
     result.warnings.push({
-      code: "ARCORE_CLOSEST_CANDIDATE_USED",
-      message: "No hubo coincidencia exacta en Arcore; se utilizo el candidato mas cercano.",
+      code: "ARCORE_SAFE_TRANSFORM_USED",
+      message: "Resolucion Arcore segura aplicada: se agrego un unico cero final.",
       sourceSku: result.sourceSku,
       matchedCode: result.matchedCode,
+      rule: result.supplierResolution.rule,
     });
   }
 
@@ -151,9 +152,9 @@ function addPlanMessages(result) {
 
 function printPublicationPlans(result) {
   const publicationIds = new Set([
-    ...result.plans.status.publications,
-    ...result.plans.price.publications,
-    ...result.plans.image.publications,
+    ...(result.plans.status?.publications || []),
+    ...(result.plans.price?.publications || []),
+    ...(result.plans.image?.publications || []),
   ].map((item) => `${item.productId}:${item.variantId}`));
 
   if (publicationIds.size === 0) return;
@@ -161,13 +162,13 @@ function printPublicationPlans(result) {
   console.log("\nPlanes por publicacion:");
   for (const key of publicationIds) {
     const [productId, variantId] = key.split(":");
-    const status = result.plans.status.publications.find(
+    const status = result.plans.status?.publications.find(
       (item) => String(item.productId) === productId && String(item.variantId) === variantId,
     );
-    const price = result.plans.price.publications.find(
+    const price = result.plans.price?.publications.find(
       (item) => String(item.productId) === productId && String(item.variantId) === variantId,
     );
-    const image = result.plans.image.publications.find(
+    const image = result.plans.image?.publications.find(
       (item) => String(item.productId) === productId && String(item.variantId) === variantId,
     );
     console.log(
@@ -181,6 +182,9 @@ function printResult(result) {
   console.log(`- sourceSku: ${result.sourceSku}`);
   console.log(`- matchedCode: ${result.matchedCode || "NO_ENCONTRADO"}`);
   console.log(`- matchType Arcore: ${result.matchType || "NO_ENCONTRADO"}`);
+  console.log(
+    `- supplierResolution: ${result.supplierResolution?.type || "NO_ENCONTRADA"}`,
+  );
   console.log(`- normalizedSku: ${result.normalizedSku}`);
   console.log(`- classification: ${result.classification}`);
   console.log(`- matchCount Tiendanube: ${result.tiendanube.matchCount}`);
@@ -205,9 +209,9 @@ function printResult(result) {
   console.log(`- imagen: ${result.supplier.imageUrl || "SIN_IMAGEN"}`);
 
   console.log("\nPlan agregado:");
-  console.log(`- estado: ${result.plans.status.action}`);
-  console.log(`- precio: ${result.plans.price.action}`);
-  console.log(`- imagen: ${result.plans.image.action}`);
+  console.log(`- estado: ${result.plans.status?.action || "NOT_PLANNED"}`);
+  console.log(`- precio: ${result.plans.price?.action || "NOT_PLANNED"}`);
+  console.log(`- imagen: ${result.plans.image?.action || "NOT_PLANNED"}`);
   printPublicationPlans(result);
 
   console.log("\nResumen:");
@@ -227,6 +231,7 @@ async function syncProduct(sourceSku, dependencies = {}) {
     normalizedSku,
     matchedCode: null,
     matchType: null,
+    supplierResolution: null,
     classification: "",
     dryRun: true,
     writeOperationsAvailable: false,
@@ -255,18 +260,59 @@ async function syncProduct(sourceSku, dependencies = {}) {
     throw error;
   }
 
+  let supplierProduct;
+  try {
+    supplierProduct = await (
+      dependencies.extractArcoreProduct || extractArcoreProduct
+    )(sourceSku);
+  } catch (error) {
+    if (
+      error.supplierResolution?.type !== "AMBIGUOUS" &&
+      error.supplierResolution?.type !== "NOT_FOUND"
+    ) {
+      throw error;
+    }
+
+    result.classification = "MANUAL_REVIEW";
+    result.matchType = error.supplierResolution.type;
+    result.supplierResolution = error.supplierResolution;
+    result.supplier = {
+      sourceSku,
+      matchedCode: null,
+      matchType: error.supplierResolution.type,
+      availability: null,
+      availabilitySource: null,
+      supplierPrice: null,
+      priceSourceLabel: null,
+      imageUrl: null,
+    };
+    result.plans = { status: null, price: null, image: null };
+    result.summary = {
+      requiresStatusChange: false,
+      requiresPriceChange: false,
+      requiresImageChange: false,
+      requiresCreation: false,
+      requiresManualReview: true,
+    };
+    result.errors.push({
+      code: error.code,
+      message: error.message,
+      supplierResolution: error.supplierResolution,
+    });
+    return result;
+  }
+
   getTiendanubeConfig();
   const client = dependencies.client || createTiendanubeReadOnlyClient();
-  const supplierProduct = await (dependencies.extractArcoreProduct || extractArcoreProduct)(
-    sourceSku,
-  );
 
   result.matchedCode = supplierProduct.matchedCode || supplierProduct.codigo || null;
   result.matchType = supplierProduct.matchType || null;
+  result.supplierResolution = supplierProduct.supplierResolution || null;
   result.supplier = {
     sourceSku,
     matchedCode: result.matchedCode,
     matchType: result.matchType,
+    supplierResolution: result.supplierResolution,
     availability: supplierProduct.estadoDisponibilidad,
     availabilitySource: supplierProduct.availabilitySource || null,
     supplierPrice: supplierProduct.precio,
