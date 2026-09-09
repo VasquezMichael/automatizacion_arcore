@@ -19,6 +19,7 @@ const BLOCKING_IMAGE_ACTIONS = new Set([
   "MANUAL_REVIEW",
 ]);
 const PRICE_ERROR_CODES = new Set([
+  "INVALID_CALCULATED_PRICE",
   "INVALID_SUPPLIER_PRICE",
   "PRICE_CALCULATION_FAILED",
   "PRICE_WRITE_BLOCKED",
@@ -51,13 +52,14 @@ function readExecutionGates(env = process.env) {
   const dryRun = String(env.TIENDANUBE_DRY_RUN || "true").trim().toLowerCase() !== "false";
   const executionEnabled =
     String(env.TIENDANUBE_EXECUTION_ENABLED || "false").trim().toLowerCase() === "true";
+  const writeModeRequested = !dryRun && executionEnabled;
 
   return {
     dryRun,
-    effectiveDryRun: true,
+    effectiveDryRun: !writeModeRequested,
     executionEnabled,
-    writeOperationsAvailable: false,
-    writeModeRequested: !dryRun && executionEnabled,
+    writeOperationsAvailable: writeModeRequested,
+    writeModeRequested,
   };
 }
 
@@ -117,12 +119,35 @@ function collectDomainBlocks(plan) {
   }
 
   const supplierPrice = parseSupplierPrice(plan?.supplier?.supplierPrice);
+  const calculatedPrice = Number(plan?.plans?.price?.calculation?.calculatedPrice);
+  const priceUpdateRequested = actions.includes("PRICE_UPDATE");
+  if (priceUpdateRequested && (supplierPrice === null || supplierPrice < 0)) {
+    addDomainBlock(
+      domainBlocks,
+      "price",
+      "INVALID_SUPPLIER_PRICE",
+      "PRICE_UPDATE requiere un precio proveedor valido y mayor que cero.",
+    );
+  }
   if (supplierPrice === 0) {
     addDomainBlock(
       domainBlocks,
       "price",
       "ZERO_SUPPLIER_PRICE",
       "El precio proveedor cero requiere revision manual.",
+    );
+  }
+  if (
+    priceUpdateRequested &&
+    (!Number.isFinite(calculatedPrice) ||
+      calculatedPrice <= 0 ||
+      !Number.isInteger(calculatedPrice))
+  ) {
+    addDomainBlock(
+      domainBlocks,
+      "price",
+      "INVALID_CALCULATED_PRICE",
+      "PRICE_UPDATE requiere un precio final entero, valido y mayor que cero.",
     );
   }
 

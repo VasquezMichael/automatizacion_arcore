@@ -10,12 +10,18 @@ const {
 const {
   buildBlockedExecutionPlan,
   buildExecutionPlan,
+  summarizeActions,
 } = require("./executionPlan");
 const {
   createExecutionIdentity,
   persistExecution,
 } = require("./executionLog");
 const { revalidateSyncPlan } = require("./revalidate");
+const {
+  executeSinglePriceUpdate,
+  isEligibleSinglePriceUpdate,
+} = require("./singlePriceExecution");
+const { createTiendanubePriceAdapter } = require("./tiendanubePriceAdapter");
 
 function serializeError(error) {
   return {
@@ -38,19 +44,69 @@ function baseExecution(sourceSku, gates, identity) {
     revalidation: null,
     executionPlan: null,
     result: null,
-    warnings: [
-      {
-        code: "EXECUTION_NOT_IMPLEMENTED",
-        message: "El executor esta en simulacion y no dispone de operaciones de escritura.",
-        writeModeRequested: gates.writeModeRequested,
-      },
-    ],
+    warnings: [],
     errors: [],
     dryRun: gates.dryRun,
     effectiveDryRun: gates.effectiveDryRun,
     executionEnabled: gates.executionEnabled,
+    writeModeRequested: gates.writeModeRequested,
     writeOperationsAvailable: false,
   };
+}
+
+function annotateExecutionResults(actions) {
+  for (const action of actions || []) {
+    if (action.executionResult) continue;
+    if (["BLOCKED", "NOT_EXECUTABLE", "REVALIDATION_FAILED"].includes(action.simulationResult)) {
+      action.executionResult = "BLOCKED";
+    } else if (action.simulationResult === "SKIPPED_ALREADY_APPLIED") {
+      action.executionResult = "SKIPPED_ALREADY_APPLIED";
+    } else {
+      action.executionResult = "SIMULATED";
+    }
+  }
+}
+
+async function executeSupportedWrites(execution, gates, dependencies) {
+  const actions = execution.executionPlan?.actions || [];
+  annotateExecutionResults(actions);
+  if (!gates.writeModeRequested || execution.revalidation?.ok !== true) return;
+
+  const priceAction = actions.find((action) => action.type === "PRICE");
+  const writeAvailable = isEligibleSinglePriceUpdate(
+    execution.originalPlan,
+    execution.revalidation,
+    priceAction,
+  );
+  execution.writeOperationsAvailable = writeAvailable;
+  if (!writeAvailable) {
+    return;
+  }
+
+  const adapter = dependencies.priceAdapter || createTiendanubePriceAdapter();
+  await executeSinglePriceUpdate({
+    plan: execution.originalPlan,
+    revalidation: execution.revalidation,
+    action: priceAction,
+    adapter,
+  });
+
+  const finalVerify = actions.find((action) => action.type === "FINAL_VERIFY");
+  if (finalVerify) {
+    if (priceAction.executionResult === "WRITE_SUCCEEDED") {
+      finalVerify.simulationResult = "PASSED";
+      finalVerify.executionResult = "WRITE_SUCCEEDED";
+    } else if (priceAction.executionResult === "WRITE_VERIFICATION_FAILED") {
+      finalVerify.simulationResult = "FAILED";
+      finalVerify.executionResult = "WRITE_VERIFICATION_FAILED";
+    }
+  }
+
+  execution.errors.push(...(priceAction.errors || []));
+  execution.result = summarizeActions(
+    actions,
+    priceAction.executionResult === "BLOCKED",
+  );
 }
 
 function notRunRevalidation(reason) {
@@ -129,6 +185,7 @@ async function executeSyncPlan(sourceSku, dependencies = {}) {
           };
           execution.errors.push(...simulation.issues);
         }
+        await executeSupportedWrites(execution, gates, dependencies);
       }
     }
   } catch (error) {
@@ -148,6 +205,8 @@ async function executeSyncPlan(sourceSku, dependencies = {}) {
       failedActions: Math.max(failed.summary.failedActions, 1),
     };
   }
+
+  annotateExecutionResults(execution.executionPlan?.actions);
 
   if (shouldPersist) {
     const persist = dependencies.persistExecution || persistExecution;
@@ -172,13 +231,13 @@ function printExecution(execution) {
   console.log(`- writeOperationsAvailable: ${execution.writeOperationsAvailable}`);
   console.log(`- revalidation: ${execution.revalidation?.status || "NO_EJECUTADA"}`);
 
-  console.log("\nAcciones simuladas:");
+  console.log("\nAcciones:");
   for (const action of execution.executionPlan?.actions || []) {
     const ids = action.productId
       ? ` | productId ${action.productId} | variantId ${action.variantId}`
       : "";
     console.log(
-      `- ${action.type}${ids} | ${action.plannedAction} | ${action.simulationResult}`,
+      `- ${action.type}${ids} | ${action.plannedAction} | ${action.executionResult || action.simulationResult}`,
     );
   }
 
@@ -189,15 +248,28 @@ function printExecution(execution) {
   console.log(`- warnings: ${execution.warnings.length}`);
   console.log(`- errors: ${execution.errors.length}`);
   if (execution.outputFile) console.log(`\nEjecucion guardada en: ${execution.outputFile}`);
-  console.log("NO SE REALIZARON ESCRITURAS.");
+  if (execution.result?.writeAttempted) {
+    console.log(
+      execution.result.writeSucceeded
+        ? "Se intento al menos una escritura y todos los PUT intentados respondieron exitosamente."
+        : "Se intento al menos una escritura y al menos un PUT fallo.",
+    );
+    console.log(
+      execution.result.verified
+        ? "La escritura fue verificada por GET posterior."
+        : "La escritura no quedo completamente verificada.",
+    );
+  } else {
+    console.log("NO SE REALIZARON ESCRITURAS.");
+  }
 }
 
 async function main() {
   const sourceSku = process.argv[2] || "";
-  console.log("=== EXECUTOR SIMULATION MODE - NO WRITES AVAILABLE ===");
+  console.log("=== EXECUTOR CONTROLADO ===");
   const execution = await executeSyncPlan(sourceSku);
   printExecution(execution);
-  process.exitCode = ["BLOCKED", "FAILED"].includes(execution.result.executionStatus)
+  process.exitCode = ["BLOCKED", "FAILED", "PARTIAL_FAILURE"].includes(execution.result.executionStatus)
     ? 1
     : 0;
 }
@@ -205,7 +277,7 @@ async function main() {
 if (require.main === module) {
   main().catch((error) => {
     console.error(`Error fatal del executor: ${error.message}`);
-    console.error("NO SE REALIZARON ESCRITURAS.");
+    console.error("No fue posible determinar un resultado final trazable.");
     process.exitCode = 1;
   });
 }
