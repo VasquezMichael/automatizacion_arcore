@@ -22,6 +22,8 @@
     "arcore:test-code-resolution": "node src/extractor/testArcoreCodeResolver.js",
     "images:test-fingerprint": "node src/tiendanube/testImageFingerprint.js",
     "sync:test": "node src/sync/syncProduct.js",
+    "executor:test": "node src/executor/executeSyncPlan.js",
+    "executor:test-unit": "node src/executor/testExecutor.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"

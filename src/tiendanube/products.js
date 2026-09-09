@@ -91,16 +91,24 @@ function collectVariantMatches(products, sourceSku) {
 }
 
 async function searchProductsByQuery(query, client) {
-  const response = await client.listProducts({
-    q: query,
-    page: 1,
-    perPage: 30,
-  });
+  const perPage = 30;
+  const products = [];
+  let page = 1;
+  let status = null;
 
-  assertSuccess(response, `GET /products?q=${query}`, [200]);
+  while (true) {
+    const response = await client.listProducts({ q: query, page, perPage });
+    assertSuccess(response, `GET /products?q=${query}&page=${page}`, [200]);
+    status = response.status;
+    const currentPage = Array.isArray(response.data) ? response.data : [];
+    products.push(...currentPage);
+    if (currentPage.length < perPage) break;
+    page++;
+  }
+
   return {
-    status: response.status,
-    products: Array.isArray(response.data) ? response.data : [],
+    status,
+    products,
   };
 }
 
