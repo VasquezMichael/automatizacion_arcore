@@ -404,8 +404,23 @@ async function testOtherDomainsRemainWithoutWrites() {
     publication.action = "IMAGE_REPLACE";
   });
   const fake = fakeLegacyAdapter(plan);
-  const result = await executeLegacy(plan, fake);
+  const statusCalls = [];
+  const result = await runControlled(plan, legacyRevalidation(plan), {
+    env: WRITE_ENV,
+    priceAdapter: fake.adapter,
+    statusAdapter: {
+      async getProduct(productId) {
+        statusCalls.push({ method: "GET_PRODUCT", productId });
+        throw new Error("STATUS LEGACY_GROUP no debe acceder al adapter.");
+      },
+      async updateProductPublished(productId, published) {
+        statusCalls.push({ method: "PUT_STATUS", productId, published });
+        throw new Error("STATUS LEGACY_GROUP no debe ejecutar PUT.");
+      },
+    },
+  });
   assert.equal(putCalls(fake).length, 1);
+  assert.equal(statusCalls.length, 0);
   assert.deepEqual(putCalls(fake)[0].payload, { price: 150 });
   assert(
     result.executionPlan.actions
@@ -432,7 +447,7 @@ async function testOtherDomainsRemainWithoutWrites() {
       .executionResult,
     "SIMULATED",
   );
-  console.log("OK N: CREATE_SINGLE, STATUS e IMAGE siguen sin writes.");
+  console.log("OK N: CREATE_SINGLE, STATUS LEGACY_GROUP e IMAGE siguen sin writes.");
 }
 
 async function main() {
