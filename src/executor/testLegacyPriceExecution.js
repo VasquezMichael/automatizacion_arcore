@@ -11,6 +11,8 @@ const {
 const WRITE_ENV = {
   TIENDANUBE_DRY_RUN: "false",
   TIENDANUBE_EXECUTION_ENABLED: "true",
+  TIENDANUBE_PRICE_EXECUTION_ENABLED: "true",
+  TIENDANUBE_STATUS_EXECUTION_ENABLED: "false",
 };
 
 function pairKey(item) {
@@ -206,7 +208,7 @@ async function testGates() {
     assert.equal(result.result.executionStatus, "SIMULATED", name);
     assert.equal(result.result.writeAttemptedCount, 0, name);
   }
-  console.log("OK A-B: LEGACY_GROUP requiere ambos gates.");
+  console.log("OK A-B: LEGACY_GROUP requiere gates globales y PRICE.");
 }
 
 async function testValidGroupWritesEligiblePublications() {
@@ -406,7 +408,10 @@ async function testOtherDomainsRemainWithoutWrites() {
   const fake = fakeLegacyAdapter(plan);
   const statusCalls = [];
   const result = await runControlled(plan, legacyRevalidation(plan), {
-    env: WRITE_ENV,
+    env: {
+      ...WRITE_ENV,
+      TIENDANUBE_STATUS_EXECUTION_ENABLED: "true",
+    },
     priceAdapter: fake.adapter,
     statusAdapter: {
       async getProduct(productId) {
@@ -476,4 +481,10 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main };
+module.exports = {
+  fakeLegacyAdapter,
+  legacyPlan,
+  legacyRevalidation,
+  main,
+  putCalls,
+};
