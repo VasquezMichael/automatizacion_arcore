@@ -291,7 +291,7 @@ function buildCreationAction(plan, domainBlocks) {
   };
 }
 
-function summarizeActions(actions, blocked) {
+function summarizeActions(actions, blocked, { executionMode = false } = {}) {
   const domainActions = actions.filter(
     (action) => action.type !== "REVALIDATE" && action.type !== "FINAL_VERIFY",
   );
@@ -326,10 +326,19 @@ function summarizeActions(actions, blocked) {
   else if (verificationFailedActions > 0) {
     executionStatus = ExecutionStatus.PARTIAL_FAILURE;
   }
-  else if (failedActions > 0) executionStatus = ExecutionStatus.FAILED;
+  else if (failedActions > 0) {
+    executionStatus = successfulWrites > 0
+      ? ExecutionStatus.PARTIAL_FAILURE
+      : ExecutionStatus.FAILED;
+  }
+  else if (successfulWrites > 0 && blockedActions > 0) {
+    executionStatus = ExecutionStatus.PARTIAL_FAILURE;
+  }
   else if (successfulWrites > 0) executionStatus = ExecutionStatus.SUCCESS;
   else if (blockedActions > 0) {
-    executionStatus = ExecutionStatus.SIMULATED_WITH_BLOCKS;
+    executionStatus = executionMode
+      ? ExecutionStatus.BLOCKED
+      : ExecutionStatus.SIMULATED_WITH_BLOCKS;
   }
   else if (wouldWrite > 0) executionStatus = ExecutionStatus.SIMULATED;
 

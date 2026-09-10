@@ -155,6 +155,7 @@ async function runControlled(plan, revalidation, options = {}) {
     syncProduct: async () => clone(plan),
     revalidateSyncPlan: async () => clone(revalidation),
     ...(options.priceAdapter ? { priceAdapter: options.priceAdapter } : {}),
+    ...(options.statusAdapter ? { statusAdapter: options.statusAdapter } : {}),
   });
   assert.equal(clientAccessed, false);
   return result;

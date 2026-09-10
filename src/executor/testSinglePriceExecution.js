@@ -81,10 +81,11 @@ function putCalls(fake) {
   return fake.calls.filter((call) => call.method === "PUT_PRICE");
 }
 
-async function executePrice(plan, fake, env = WRITE_ENV) {
+async function executePrice(plan, fake, env = WRITE_ENV, options = {}) {
   return runControlled(plan, successfulRevalidation(plan), {
     env,
     priceAdapter: fake.adapter,
+    ...options,
   });
 }
 
@@ -193,7 +194,7 @@ async function testInvalidPriceInputsBlockPrice() {
   console.log("OK G3: precios proveedor/final invalidos bloquean solo PRICE.");
 }
 
-async function testStatusAndImageRemainSimulation() {
+async function testStatusAndPriceCanWriteWhileImageRemainsSimulation() {
   const plan = priceUpdatePlan();
   Object.assign(plan.plans.status.publications[0], {
     action: "PUBLISH",
@@ -207,19 +208,44 @@ async function testStatusAndImageRemainSimulation() {
   });
   plan.plans.image.action = "IMAGE_REPLACE";
   const fake = fakePriceAdapter();
-  const result = await executePrice(plan, fake);
+  const statusCalls = [];
+  let published = false;
+  const statusAdapter = {
+    async getProduct(productId) {
+      statusCalls.push({ method: "GET_PRODUCT", productId });
+      return {
+        id: productId,
+        published,
+        variants: [{ id: 201, sku: "415 0000 10" }],
+      };
+    },
+    async updateProductPublished(productId, targetPublished) {
+      statusCalls.push({
+        method: "PUT_STATUS",
+        productId,
+        payload: { published: targetPublished },
+      });
+      published = targetPublished;
+      return { id: productId, published };
+    },
+  };
+  const result = await executePrice(plan, fake, WRITE_ENV, { statusAdapter });
   assert.equal(putCalls(fake).length, 1);
   assert.equal(
     result.executionPlan.actions.find((action) => action.type === "STATUS")
       .executionResult,
-    "SIMULATED",
+    "WRITE_SUCCEEDED",
+  );
+  assert.deepEqual(
+    statusCalls.find((call) => call.method === "PUT_STATUS").payload,
+    { published: true },
   );
   assert.equal(
     result.executionPlan.actions.find((action) => action.type === "IMAGE")
       .executionResult,
     "SIMULATED",
   );
-  console.log("OK G2: STATUS e IMAGE permanecen simulados con ambos gates.");
+  console.log("OK G2: STATUS y PRICE escriben por separado; IMAGE sigue simulado.");
 }
 
 async function testAlreadyAppliedImmediatelyBeforePut() {
@@ -298,7 +324,7 @@ async function main() {
   await testUnsupportedClassificationsRemainSimulation();
   await testPriceNoChangeDoesNotWrite();
   await testInvalidPriceInputsBlockPrice();
-  await testStatusAndImageRemainSimulation();
+  await testStatusAndPriceCanWriteWhileImageRemainsSimulation();
   await testAlreadyAppliedImmediatelyBeforePut();
   await testSkuChangedBlocksPrice();
   await testIdMismatchBlocksPrice();
@@ -315,4 +341,9 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main };
+module.exports = {
+  fakePriceAdapter,
+  main,
+  priceUpdatePlan,
+  putCalls,
+};

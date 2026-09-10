@@ -23,10 +23,15 @@ const {
   isEligibleSinglePriceUpdate,
 } = require("./singlePriceExecution");
 const {
+  executeSingleStatusUpdate,
+  isEligibleSingleStatusUpdate,
+} = require("./singleStatusExecution");
+const {
   executeLegacyPriceUpdates,
   validateLegacyPriceExecution,
 } = require("./legacyPriceExecution");
 const { createTiendanubePriceAdapter } = require("./tiendanubePriceAdapter");
+const { createTiendanubeStatusAdapter } = require("./tiendanubeStatusAdapter");
 
 function serializeError(error) {
   return {
@@ -91,30 +96,82 @@ function updateFinalVerify(actions, executionStatus) {
   }
 }
 
-async function executeSingleWrite(execution, dependencies, actions) {
+function actionHasError(action, code) {
+  return (action?.errors || []).some((error) => error.code === code);
+}
+
+function statusHasCriticalIdentityFailure(action) {
+  return (
+    actionHasError(action, "STATUS_PREWRITE_READ_FAILED") ||
+    actionHasError(action, "STATUS_PREWRITE_IDENTITY_MISMATCH") ||
+    (actionHasError(action, "STATUS_WRITE_VERIFICATION_FAILED") &&
+      action.errors.some((error) => error.details?.identity))
+  );
+}
+
+function blockActionAfterCriticalIdentity(action, sourceAction) {
+  if (!action || action.executionResult === "BLOCKED") return;
+  const error = {
+    code: "CRITICAL_IDENTITY_FAILED",
+    message: "La ejecucion se detuvo por una inconsistencia critica de identidad.",
+    details: {
+      sourceDomain: sourceAction.type,
+      sourceErrors: (sourceAction.errors || []).map((item) => item.code),
+    },
+  };
+  action.simulationResult = "BLOCKED";
+  action.executionResult = "BLOCKED";
+  action.errors = action.errors || [];
+  action.errors.push(error);
+}
+
+async function executeSingleWrites(execution, dependencies, actions) {
+  const statusAction = actions.find((action) => action.type === "STATUS");
   const priceAction = actions.find((action) => action.type === "PRICE");
-  const writeAvailable = isEligibleSinglePriceUpdate(
+  const statusWriteAvailable = isEligibleSingleStatusUpdate(
+    execution.originalPlan,
+    execution.revalidation,
+    statusAction,
+  );
+  const priceWriteAvailable = isEligibleSinglePriceUpdate(
     execution.originalPlan,
     execution.revalidation,
     priceAction,
   );
-  execution.writeOperationsAvailable = writeAvailable;
-  if (!writeAvailable) {
-    return;
+  execution.writeOperationsAvailable = statusWriteAvailable || priceWriteAvailable;
+  let criticalIdentityFailure = false;
+
+  if (statusWriteAvailable) {
+    const statusAdapter =
+      dependencies.statusAdapter || createTiendanubeStatusAdapter();
+    await executeSingleStatusUpdate({
+      plan: execution.originalPlan,
+      revalidation: execution.revalidation,
+      action: statusAction,
+      adapter: statusAdapter,
+    });
+    execution.errors.push(...(statusAction.errors || []));
+    criticalIdentityFailure = statusHasCriticalIdentityFailure(statusAction);
   }
 
-  const adapter = dependencies.priceAdapter || createTiendanubePriceAdapter();
-  await executeSinglePriceUpdate({
-    plan: execution.originalPlan,
-    revalidation: execution.revalidation,
-    action: priceAction,
-    adapter,
-  });
+  if (priceWriteAvailable && !criticalIdentityFailure) {
+    const priceAdapter = dependencies.priceAdapter || createTiendanubePriceAdapter();
+    await executeSinglePriceUpdate({
+      plan: execution.originalPlan,
+      revalidation: execution.revalidation,
+      action: priceAction,
+      adapter: priceAdapter,
+    });
+    execution.errors.push(...(priceAction.errors || []));
+  } else if (priceWriteAvailable && criticalIdentityFailure) {
+    blockActionAfterCriticalIdentity(priceAction, statusAction);
+    execution.errors.push(...(priceAction.errors || []));
+  }
 
-  execution.errors.push(...(priceAction.errors || []));
   execution.result = summarizeActions(
     actions,
-    priceAction.executionResult === "BLOCKED",
+    criticalIdentityFailure,
+    { executionMode: true },
   );
   updateFinalVerify(actions, execution.result.executionStatus);
 }
@@ -176,7 +233,7 @@ async function executeSupportedWrites(execution, gates, dependencies) {
 
   if (!gates.writeModeRequested || execution.revalidation?.ok !== true) return;
   if (execution.originalPlan?.classification === "SINGLE") {
-    await executeSingleWrite(execution, dependencies, actions);
+    await executeSingleWrites(execution, dependencies, actions);
   }
 }
 
