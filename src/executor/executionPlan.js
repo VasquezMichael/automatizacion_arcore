@@ -359,31 +359,32 @@ function summarizeActions(actions, blocked, { executionMode = false } = {}) {
   };
 }
 
-function summarizeLegacyPriceActions(
+function summarizeLegacyDomainActions(
   actions,
+  type,
   { groupIntegrityFailed = false, simulated = false } = {},
 ) {
-  const summary = summarizeActions(actions, false);
-  const priceActions = actions.filter((action) => action.type === "PRICE");
-  const writeAttemptedCount = priceActions.filter(
+  const domainActions = actions.filter((action) => action.type === type);
+  const summary = summarizeActions(domainActions, false);
+  const writeAttemptedCount = domainActions.filter(
     (action) => action.writeAttempted,
   ).length;
-  const writeSucceededCount = priceActions.filter(
+  const writeSucceededCount = domainActions.filter(
     (action) => action.writeSucceeded,
   ).length;
-  const skippedAlreadyAppliedCount = priceActions.filter(
+  const skippedAlreadyAppliedCount = domainActions.filter(
     (action) => action.executionResult === "SKIPPED_ALREADY_APPLIED",
   ).length;
-  const failedCount = priceActions.filter((action) =>
+  const failedCount = domainActions.filter((action) =>
     ["WRITE_FAILED", "WRITE_VERIFICATION_FAILED"].includes(
       action.executionResult,
     ),
   ).length;
-  const blockedCount = priceActions.filter(
+  const blockedCount = domainActions.filter(
     (action) => action.executionResult === "BLOCKED",
   ).length;
-  const verifiedCount = priceActions.filter((action) => action.verified).length;
-  const updatedCount = priceActions.filter((action) => action.updated).length;
+  const verifiedCount = domainActions.filter((action) => action.verified).length;
+  const updatedCount = domainActions.filter((action) => action.updated).length;
   const hasPartialResult =
     failedCount > 0 ||
     (blockedCount > 0 && (writeAttemptedCount > 0 || verifiedCount > 0));
@@ -395,7 +396,7 @@ function summarizeLegacyPriceActions(
     executionStatus = ExecutionStatus.BLOCKED;
   } else if (writeAttemptedCount > 0) {
     executionStatus =
-      verifiedCount === priceActions.length
+      verifiedCount === domainActions.length
         ? ExecutionStatus.SUCCESS
         : ExecutionStatus.PARTIAL_FAILURE;
   } else {
@@ -405,7 +406,7 @@ function summarizeLegacyPriceActions(
   return {
     ...summary,
     executionStatus,
-    totalPublications: priceActions.length,
+    totalPublications: domainActions.length,
     writeAttemptedCount,
     writeSucceededCount,
     skippedAlreadyAppliedCount,
@@ -417,13 +418,102 @@ function summarizeLegacyPriceActions(
     writeSucceeded:
       writeAttemptedCount > 0 && writeSucceededCount === writeAttemptedCount,
     verified:
-      priceActions.length > 0 && verifiedCount === priceActions.length,
+      domainActions.length > 0 && verifiedCount === domainActions.length,
     updated:
-      priceActions.length > 0 &&
-      verifiedCount === priceActions.length &&
+      domainActions.length > 0 &&
+      verifiedCount === domainActions.length &&
       updatedCount > 0 &&
       failedCount === 0 &&
       blockedCount === 0,
+  };
+}
+
+function summarizeLegacyPriceActions(actions, options = {}) {
+  return summarizeLegacyDomainActions(actions, "PRICE", options);
+}
+
+function summarizeLegacyStatusActions(actions, options = {}) {
+  return summarizeLegacyDomainActions(actions, "STATUS", options);
+}
+
+function summarizeLegacyExecution(
+  actions,
+  {
+    globalIntegrityFailed = false,
+    statusIntegrityFailed = false,
+    priceIntegrityFailed = false,
+    simulated = false,
+  } = {},
+) {
+  const statusSummary = summarizeLegacyStatusActions(actions, {
+    groupIntegrityFailed: globalIntegrityFailed || statusIntegrityFailed,
+    simulated,
+  });
+  const priceSummary = summarizeLegacyPriceActions(actions, {
+    groupIntegrityFailed: globalIntegrityFailed || priceIntegrityFailed,
+    simulated,
+  });
+  const overall = summarizeActions(actions, globalIntegrityFailed, {
+    executionMode: !simulated,
+  });
+  const domainStatuses = [
+    statusSummary.executionStatus,
+    priceSummary.executionStatus,
+  ];
+  let executionStatus = overall.executionStatus;
+
+  if (!simulated) {
+    if (globalIntegrityFailed) {
+      executionStatus = overall.writeAttempted
+        ? ExecutionStatus.PARTIAL_FAILURE
+        : ExecutionStatus.BLOCKED;
+    } else if (
+      domainStatuses.some((status) =>
+        [ExecutionStatus.PARTIAL_FAILURE, ExecutionStatus.FAILED].includes(status),
+      )
+    ) {
+      executionStatus = ExecutionStatus.PARTIAL_FAILURE;
+    } else if (domainStatuses.includes(ExecutionStatus.BLOCKED)) {
+      executionStatus = domainStatuses.every(
+        (status) => status === ExecutionStatus.BLOCKED,
+      )
+        ? ExecutionStatus.BLOCKED
+        : ExecutionStatus.PARTIAL_FAILURE;
+    } else if (domainStatuses.includes(ExecutionStatus.SUCCESS)) {
+      executionStatus = ExecutionStatus.SUCCESS;
+    } else {
+      executionStatus = ExecutionStatus.NO_CHANGES;
+    }
+  }
+
+  const domainActions = actions.filter((action) =>
+    ["STATUS", "PRICE"].includes(action.type),
+  );
+  const attemptedActions = domainActions.filter((action) => action.writeAttempted);
+  const fullyVerified =
+    statusSummary.verified && priceSummary.verified && !globalIntegrityFailed;
+  const fullyUpdated =
+    executionStatus === ExecutionStatus.SUCCESS &&
+    fullyVerified &&
+    (statusSummary.updated || priceSummary.updated);
+
+  return {
+    ...priceSummary,
+    ...overall,
+    executionStatus,
+    writeAttempted: attemptedActions.length > 0,
+    writeSucceeded:
+      attemptedActions.length > 0 &&
+      attemptedActions.every((action) => action.writeSucceeded),
+    verified: fullyVerified,
+    updated: fullyUpdated,
+    aggregateWriteAttemptedCount: attemptedActions.length,
+    aggregateWriteSucceededCount: domainActions.filter(
+      (action) => action.writeSucceeded,
+    ).length,
+    aggregateVerifiedCount: domainActions.filter((action) => action.verified).length,
+    statusSummary,
+    priceSummary,
   };
 }
 
@@ -520,5 +610,7 @@ module.exports = {
   buildBlockedExecutionPlan,
   buildExecutionPlan,
   summarizeActions,
+  summarizeLegacyExecution,
   summarizeLegacyPriceActions,
+  summarizeLegacyStatusActions,
 };

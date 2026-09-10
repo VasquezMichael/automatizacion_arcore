@@ -177,6 +177,74 @@ function fakeLegacyAdapter(plan, options = {}) {
   };
 }
 
+function fakeLegacyStatusAdapter(plan, options = {}) {
+  const calls = [];
+  const records = new Map(
+    plan.plans.status.publications.map((publication) => [
+      pairKey(publication),
+      {
+        productId: publication.productId,
+        variantId: publication.variantId,
+        sku: plan.normalizedSku,
+        published: publication.published,
+      },
+    ]),
+  );
+
+  for (const [pair, published] of Object.entries(options.preWritePublished || {})) {
+    records.get(pair).published = published;
+  }
+
+  return {
+    calls,
+    records,
+    adapter: {
+      async getProduct(productId) {
+        calls.push({ method: "GET_STATUS_PRODUCT", productId });
+        const record = Array.from(records.values()).find(
+          (item) => String(item.productId) === String(productId),
+        );
+        const pair = pairKey(record || {});
+        const override = options.identityOverrides?.[pair] || {};
+        const published = options.verificationMismatches?.includes(pair) &&
+          calls.filter(
+            (call) => call.method === "PUT_STATUS" && String(call.productId) === String(productId),
+          ).length > 0
+          ? !record.published
+          : record.published;
+        return {
+          id: override.productId ?? record.productId,
+          published,
+          variants: [
+            {
+              id: override.variantId ?? record.variantId,
+              sku: override.sku ?? record.sku,
+            },
+          ],
+        };
+      },
+      async updateProductPublished(productId, published) {
+        const record = Array.from(records.values()).find(
+          (item) => String(item.productId) === String(productId),
+        );
+        const pair = pairKey(record || {});
+        calls.push({
+          method: "PUT_STATUS",
+          productId,
+          payload: { published },
+        });
+        if (options.putFailures?.includes(pair)) {
+          const error = new Error(`PUT STATUS simulado fallo para ${pair}`);
+          error.status = 500;
+          throw error;
+        }
+        record.published = published;
+        return { id: productId, published };
+      },
+    },
+  };
+}
+
 function priceActions(result) {
   return result.executionPlan.actions.filter((action) => action.type === "PRICE");
 }
@@ -185,10 +253,17 @@ function putCalls(fake) {
   return fake.calls.filter((call) => call.method === "PUT_PRICE");
 }
 
-async function executeLegacy(plan, fake, env = WRITE_ENV, revalidation) {
+async function executeLegacy(
+  plan,
+  fake,
+  env = WRITE_ENV,
+  revalidation,
+  statusFake = fakeLegacyStatusAdapter(plan),
+) {
   return runControlled(plan, revalidation || legacyRevalidation(plan), {
     env,
     priceAdapter: fake.adapter,
+    statusAdapter: statusFake.adapter,
   });
 }
 
@@ -252,7 +327,8 @@ async function testInvalidSupplierPriceBlocksWithoutAdapter() {
   const fake = fakeLegacyAdapter(plan);
   const result = await executeLegacy(plan, fake);
   assert.equal(fake.calls.length, 0);
-  assert.equal(result.result.executionStatus, "BLOCKED");
+  assert.equal(result.result.executionStatus, "PARTIAL_FAILURE");
+  assert.equal(result.result.statusSummary.executionStatus, "NO_CHANGES");
   assert(result.warnings.some((warning) => warning.code === "ZERO_SUPPLIER_PRICE"));
   console.log("OK D3: precio proveedor invalido bloquea sin consultar el adapter.");
 }
@@ -394,7 +470,9 @@ async function testSingleRegression() {
 
 async function testOtherDomainsRemainWithoutWrites() {
   const plan = legacyPlan([100, 150]);
+  plan.supplier.availability = "UNAVAILABLE";
   plan.plans.status.action = "UNPUBLISH";
+  plan.plans.status.desiredPublished = false;
   plan.plans.status.publications.forEach((publication) => {
     publication.action = "UNPUBLISH";
     publication.desiredPublished = false;
@@ -404,27 +482,26 @@ async function testOtherDomainsRemainWithoutWrites() {
     publication.action = "IMAGE_REPLACE";
   });
   const fake = fakeLegacyAdapter(plan);
-  const statusCalls = [];
+  const statusFake = fakeLegacyStatusAdapter(plan);
   const result = await runControlled(plan, legacyRevalidation(plan), {
     env: WRITE_ENV,
     priceAdapter: fake.adapter,
-    statusAdapter: {
-      async getProduct(productId) {
-        statusCalls.push({ method: "GET_PRODUCT", productId });
-        throw new Error("STATUS LEGACY_GROUP no debe acceder al adapter.");
-      },
-      async updateProductPublished(productId, published) {
-        statusCalls.push({ method: "PUT_STATUS", productId, published });
-        throw new Error("STATUS LEGACY_GROUP no debe ejecutar PUT.");
-      },
-    },
+    statusAdapter: statusFake.adapter,
   });
   assert.equal(putCalls(fake).length, 1);
-  assert.equal(statusCalls.length, 0);
+  assert.equal(
+    statusFake.calls.filter((call) => call.method === "PUT_STATUS").length,
+    2,
+  );
   assert.deepEqual(putCalls(fake)[0].payload, { price: 150 });
   assert(
+    statusFake.calls
+      .filter((call) => call.method === "PUT_STATUS")
+      .every((call) => Object.keys(call.payload).join() === "published"),
+  );
+  assert(
     result.executionPlan.actions
-      .filter((action) => ["STATUS", "IMAGE"].includes(action.type))
+      .filter((action) => action.type === "IMAGE")
       .every((action) => action.executionResult === "SIMULATED"),
   );
 
@@ -447,7 +524,7 @@ async function testOtherDomainsRemainWithoutWrites() {
       .executionResult,
     "SIMULATED",
   );
-  console.log("OK N: CREATE_SINGLE, STATUS LEGACY_GROUP e IMAGE siguen sin writes.");
+  console.log("OK N: STATUS LEGACY_GROUP escribe published; CREATE_SINGLE e IMAGE siguen simulados.");
 }
 
 async function main() {
@@ -476,4 +553,15 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main };
+module.exports = {
+  WRITE_ENV,
+  executeLegacy,
+  fakeLegacyAdapter,
+  fakeLegacyStatusAdapter,
+  legacyPlan,
+  legacyRevalidation,
+  main,
+  pairKey,
+  priceActions,
+  putCalls,
+};

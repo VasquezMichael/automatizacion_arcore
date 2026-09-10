@@ -353,7 +353,7 @@ async function testUnsupportedDomainsRemainWithoutStatusWrites() {
       .executionResult,
     "SIMULATED",
   );
-  console.log("OK R-S: STATUS no escribe LEGACY_GROUP ni CREATE_SINGLE.");
+  console.log("OK R-S: LEGACY_GROUP invalido y CREATE_SINGLE no escriben STATUS.");
 }
 
 async function testImageRemainsSimulation() {
