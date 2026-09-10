@@ -15,6 +15,13 @@ const { createTiendanubeStatusAdapter } = require("./tiendanubeStatusAdapter");
 const WRITE_ENV = {
   TIENDANUBE_DRY_RUN: "false",
   TIENDANUBE_EXECUTION_ENABLED: "true",
+  TIENDANUBE_PRICE_EXECUTION_ENABLED: "false",
+  TIENDANUBE_STATUS_EXECUTION_ENABLED: "true",
+};
+
+const ALL_DOMAIN_WRITE_ENV = {
+  ...WRITE_ENV,
+  TIENDANUBE_PRICE_EXECUTION_ENABLED: "true",
 };
 
 function statusUpdatePlan(availability = "AVAILABLE") {
@@ -117,7 +124,7 @@ async function testWriteGates() {
     assert.equal(statusAction(result).executionResult, "SIMULATED", name);
     assert.equal(result.writeOperationsAvailable, false, name);
   }
-  console.log("OK A-C: STATUS requiere ambos gates.");
+  console.log("OK A-C: los gates globales incompletos no habilitan STATUS.");
 }
 
 async function testAvailabilityMappings() {
@@ -159,6 +166,7 @@ async function testUnknownBlocksOnlyStatus() {
   const statusFake = fakeStatusAdapter();
   const priceFake = fakePriceAdapter();
   const result = await executeStatus(plan, statusFake, {
+    env: ALL_DOMAIN_WRITE_ENV,
     priceAdapter: priceFake.adapter,
   });
   assert.equal(statusPutCalls(statusFake).length, 0);
@@ -224,6 +232,7 @@ async function testIdentityChangesBlockGlobally() {
     });
     const priceFake = fakePriceAdapter();
     const result = await executeStatus(plan, statusFake, {
+      env: ALL_DOMAIN_WRITE_ENV,
       priceAdapter: priceFake.adapter,
     });
     assert.equal(statusPutCalls(statusFake).length, 0);
@@ -309,6 +318,7 @@ async function testMixedDomainFailureIsPartial() {
   error.status = 500;
   const priceFake = fakePriceAdapter({ updateError: error });
   const result = await executeStatus(plan, statusFake, {
+    env: ALL_DOMAIN_WRITE_ENV,
     priceAdapter: priceFake.adapter,
   });
   assert.equal(statusAction(result).executionResult, "WRITE_SUCCEEDED");
@@ -442,4 +452,9 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main };
+module.exports = {
+  fakeStatusAdapter,
+  main,
+  statusPutCalls,
+  statusUpdatePlan,
+};
