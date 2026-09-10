@@ -101,7 +101,7 @@ function isEligibleSinglePriceUpdate(plan, revalidation, action) {
   );
 }
 
-async function executeSinglePriceUpdate({ plan, revalidation, action, adapter }) {
+async function executePricePublication({ plan, action, adapter }) {
   const targetPrice = parseMoney(action.desiredState.price);
   let product;
   let variant;
@@ -140,6 +140,8 @@ async function executeSinglePriceUpdate({ plan, revalidation, action, adapter })
   if (moneyEquals(currentPrice, targetPrice)) {
     action.simulationResult = "SKIPPED_ALREADY_APPLIED";
     action.executionResult = "SKIPPED_ALREADY_APPLIED";
+    action.verifiedState = { price: currentPrice };
+    action.verified = true;
     return action;
   }
   if (!moneyEquals(currentPrice, action.currentState.price)) {
@@ -208,7 +210,12 @@ async function executeSinglePriceUpdate({ plan, revalidation, action, adapter })
   });
 }
 
+async function executeSinglePriceUpdate({ plan, action, adapter }) {
+  return executePricePublication({ plan, action, adapter });
+}
+
 module.exports = {
+  executePricePublication,
   executeSinglePriceUpdate,
   isEligibleSinglePriceUpdate,
   validateIdentity,

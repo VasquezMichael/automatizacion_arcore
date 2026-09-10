@@ -350,6 +350,74 @@ function summarizeActions(actions, blocked) {
   };
 }
 
+function summarizeLegacyPriceActions(
+  actions,
+  { groupIntegrityFailed = false, simulated = false } = {},
+) {
+  const summary = summarizeActions(actions, false);
+  const priceActions = actions.filter((action) => action.type === "PRICE");
+  const writeAttemptedCount = priceActions.filter(
+    (action) => action.writeAttempted,
+  ).length;
+  const writeSucceededCount = priceActions.filter(
+    (action) => action.writeSucceeded,
+  ).length;
+  const skippedAlreadyAppliedCount = priceActions.filter(
+    (action) => action.executionResult === "SKIPPED_ALREADY_APPLIED",
+  ).length;
+  const failedCount = priceActions.filter((action) =>
+    ["WRITE_FAILED", "WRITE_VERIFICATION_FAILED"].includes(
+      action.executionResult,
+    ),
+  ).length;
+  const blockedCount = priceActions.filter(
+    (action) => action.executionResult === "BLOCKED",
+  ).length;
+  const verifiedCount = priceActions.filter((action) => action.verified).length;
+  const updatedCount = priceActions.filter((action) => action.updated).length;
+  const hasPartialResult =
+    failedCount > 0 ||
+    (blockedCount > 0 && (writeAttemptedCount > 0 || verifiedCount > 0));
+
+  let executionStatus;
+  if (simulated) executionStatus = summary.executionStatus;
+  else if (hasPartialResult) executionStatus = ExecutionStatus.PARTIAL_FAILURE;
+  else if (blockedCount > 0 || groupIntegrityFailed) {
+    executionStatus = ExecutionStatus.BLOCKED;
+  } else if (writeAttemptedCount > 0) {
+    executionStatus =
+      verifiedCount === priceActions.length
+        ? ExecutionStatus.SUCCESS
+        : ExecutionStatus.PARTIAL_FAILURE;
+  } else {
+    executionStatus = ExecutionStatus.NO_CHANGES;
+  }
+
+  return {
+    ...summary,
+    executionStatus,
+    totalPublications: priceActions.length,
+    writeAttemptedCount,
+    writeSucceededCount,
+    skippedAlreadyAppliedCount,
+    failedCount,
+    blockedCount,
+    verifiedCount,
+    updatedCount,
+    writeAttempted: writeAttemptedCount > 0,
+    writeSucceeded:
+      writeAttemptedCount > 0 && writeSucceededCount === writeAttemptedCount,
+    verified:
+      priceActions.length > 0 && verifiedCount === priceActions.length,
+    updated:
+      priceActions.length > 0 &&
+      verifiedCount === priceActions.length &&
+      updatedCount > 0 &&
+      failedCount === 0 &&
+      blockedCount === 0,
+  };
+}
+
 function buildExecutionPlan(plan, revalidation, { domainBlocks } = {}) {
   const activeDomainBlocks = domainBlocks || { status: [], price: [], image: [] };
   const actions = [
@@ -443,4 +511,5 @@ module.exports = {
   buildBlockedExecutionPlan,
   buildExecutionPlan,
   summarizeActions,
+  summarizeLegacyPriceActions,
 };

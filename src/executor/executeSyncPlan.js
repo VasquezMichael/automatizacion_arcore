@@ -11,6 +11,7 @@ const {
   buildBlockedExecutionPlan,
   buildExecutionPlan,
   summarizeActions,
+  summarizeLegacyPriceActions,
 } = require("./executionPlan");
 const {
   createExecutionIdentity,
@@ -21,6 +22,10 @@ const {
   executeSinglePriceUpdate,
   isEligibleSinglePriceUpdate,
 } = require("./singlePriceExecution");
+const {
+  executeLegacyPriceUpdates,
+  validateLegacyPriceExecution,
+} = require("./legacyPriceExecution");
 const { createTiendanubePriceAdapter } = require("./tiendanubePriceAdapter");
 
 function serializeError(error) {
@@ -67,11 +72,26 @@ function annotateExecutionResults(actions) {
   }
 }
 
-async function executeSupportedWrites(execution, gates, dependencies) {
-  const actions = execution.executionPlan?.actions || [];
-  annotateExecutionResults(actions);
-  if (!gates.writeModeRequested || execution.revalidation?.ok !== true) return;
+function updateFinalVerify(actions, executionStatus) {
+  const finalVerify = actions.find((action) => action.type === "FINAL_VERIFY");
+  if (!finalVerify) return;
 
+  if (executionStatus === "SUCCESS") {
+    finalVerify.simulationResult = "PASSED";
+    finalVerify.executionResult = "WRITE_SUCCEEDED";
+  } else if (executionStatus === "NO_CHANGES") {
+    finalVerify.simulationResult = "PASSED";
+    finalVerify.executionResult = "SKIPPED_ALREADY_APPLIED";
+  } else if (executionStatus === "PARTIAL_FAILURE") {
+    finalVerify.simulationResult = "FAILED";
+    finalVerify.executionResult = "WRITE_VERIFICATION_FAILED";
+  } else if (executionStatus === "BLOCKED") {
+    finalVerify.simulationResult = "BLOCKED";
+    finalVerify.executionResult = "BLOCKED";
+  }
+}
+
+async function executeSingleWrite(execution, dependencies, actions) {
   const priceAction = actions.find((action) => action.type === "PRICE");
   const writeAvailable = isEligibleSinglePriceUpdate(
     execution.originalPlan,
@@ -91,22 +111,73 @@ async function executeSupportedWrites(execution, gates, dependencies) {
     adapter,
   });
 
-  const finalVerify = actions.find((action) => action.type === "FINAL_VERIFY");
-  if (finalVerify) {
-    if (priceAction.executionResult === "WRITE_SUCCEEDED") {
-      finalVerify.simulationResult = "PASSED";
-      finalVerify.executionResult = "WRITE_SUCCEEDED";
-    } else if (priceAction.executionResult === "WRITE_VERIFICATION_FAILED") {
-      finalVerify.simulationResult = "FAILED";
-      finalVerify.executionResult = "WRITE_VERIFICATION_FAILED";
-    }
-  }
-
   execution.errors.push(...(priceAction.errors || []));
   execution.result = summarizeActions(
     actions,
     priceAction.executionResult === "BLOCKED",
   );
+  updateFinalVerify(actions, execution.result.executionStatus);
+}
+
+function blockLegacyPriceActions(priceActions, issues) {
+  for (const action of priceActions) {
+    action.simulationResult = "BLOCKED";
+    action.executionResult = "BLOCKED";
+    action.errors = action.errors || [];
+    action.errors.push(...issues);
+  }
+}
+
+async function executeLegacyWrite(execution, dependencies, actions) {
+  const validation = validateLegacyPriceExecution(
+    execution.originalPlan,
+    execution.revalidation,
+    actions,
+  );
+  if (!validation.ok) {
+    blockLegacyPriceActions(validation.priceActions, validation.issues);
+    execution.errors.push(...validation.issues);
+    execution.result = summarizeLegacyPriceActions(actions, {
+      groupIntegrityFailed: true,
+    });
+    updateFinalVerify(actions, execution.result.executionStatus);
+    return;
+  }
+
+  execution.writeOperationsAvailable = validation.priceActions.some(
+    (action) => action.plannedAction === "PRICE_UPDATE",
+  );
+  const adapter = dependencies.priceAdapter || createTiendanubePriceAdapter();
+  const legacyResult = await executeLegacyPriceUpdates({
+    plan: execution.originalPlan,
+    actions: validation.priceActions,
+    adapter,
+  });
+  execution.errors.push(
+    ...validation.priceActions.flatMap((action) => action.errors || []),
+    ...legacyResult.issues,
+  );
+  execution.result = summarizeLegacyPriceActions(actions, legacyResult);
+  updateFinalVerify(actions, execution.result.executionStatus);
+}
+
+async function executeSupportedWrites(execution, gates, dependencies) {
+  const actions = execution.executionPlan?.actions || [];
+  annotateExecutionResults(actions);
+
+  if (execution.originalPlan?.classification === "LEGACY_GROUP") {
+    if (!gates.writeModeRequested || execution.revalidation?.ok !== true) {
+      execution.result = summarizeLegacyPriceActions(actions, { simulated: true });
+      return;
+    }
+    await executeLegacyWrite(execution, dependencies, actions);
+    return;
+  }
+
+  if (!gates.writeModeRequested || execution.revalidation?.ok !== true) return;
+  if (execution.originalPlan?.classification === "SINGLE") {
+    await executeSingleWrite(execution, dependencies, actions);
+  }
 }
 
 function notRunRevalidation(reason) {
