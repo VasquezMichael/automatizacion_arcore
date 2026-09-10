@@ -25,6 +25,7 @@
     "executor:test": "node src/executor/executeSyncPlan.js",
     "executor:test-unit": "node src/executor/testExecutor.js",
     "executor:test-price-write": "node src/executor/testSinglePriceExecution.js",
+    "executor:test-price-legacy": "node src/executor/testLegacyPriceExecution.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"

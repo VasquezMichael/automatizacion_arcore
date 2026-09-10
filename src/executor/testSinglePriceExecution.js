@@ -3,7 +3,6 @@ const {
   basePlan,
   clone,
   createPlan,
-  match,
   runControlled,
   successfulRevalidation,
 } = require("./testExecutor");
@@ -140,22 +139,6 @@ async function testMutableAdapterPayload() {
 }
 
 async function testUnsupportedClassificationsRemainSimulation() {
-  const legacyItem = match();
-  const legacy = priceUpdatePlan();
-  legacy.classification = "LEGACY_GROUP";
-  legacy.tiendanube.legacyGroup = {
-    valid: true,
-    expectedMatches: 1,
-    actualMatches: 1,
-    issues: [],
-  };
-  legacy.tiendanube.matches = [legacyItem];
-  const legacyFake = fakePriceAdapter();
-  const legacyResult = await executePrice(legacy, legacyFake);
-  assert.equal(putCalls(legacyFake).length, 0);
-  assert.equal(priceAction(legacyResult).executionResult, "SIMULATED");
-  assert.equal(legacyResult.writeOperationsAvailable, false);
-
   const creation = createPlan();
   const creationFake = fakePriceAdapter();
   const creationResult = await runControlled(
@@ -176,7 +159,7 @@ async function testUnsupportedClassificationsRemainSimulation() {
       .executionResult,
     "SIMULATED",
   );
-  console.log("OK E-F: LEGACY_GROUP y CREATE_SINGLE siguen simulados.");
+  console.log("OK F: CREATE_SINGLE sigue simulado.");
 }
 
 async function testPriceNoChangeDoesNotWrite() {
