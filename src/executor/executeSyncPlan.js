@@ -63,8 +63,19 @@ function baseExecution(sourceSku, gates, identity) {
     dryRun: gates.dryRun,
     effectiveDryRun: gates.effectiveDryRun,
     executionEnabled: gates.executionEnabled,
+    priceExecutionEnabled: gates.priceExecutionEnabled,
+    statusExecutionEnabled: gates.statusExecutionEnabled,
+    globalWriteRequested: gates.globalWriteRequested,
+    priceWriteRequested: gates.priceWriteRequested,
+    statusWriteRequested: gates.statusWriteRequested,
     writeModeRequested: gates.writeModeRequested,
     writeOperationsAvailable: false,
+    writeOperationsAvailableByDomain: {
+      price: false,
+      status: false,
+      image: false,
+      create: false,
+    },
   };
 }
 
@@ -129,7 +140,7 @@ function blockActionAfterCriticalIdentity(action, sourceAction) {
   action.errors.push(error);
 }
 
-async function executeSingleWrites(execution, dependencies, actions) {
+async function executeSingleWrites(execution, gates, dependencies, actions) {
   const statusAction = actions.find((action) => action.type === "STATUS");
   const priceAction = actions.find((action) => action.type === "PRICE");
   const statusWriteAvailable = isEligibleSingleStatusUpdate(
@@ -142,10 +153,14 @@ async function executeSingleWrites(execution, dependencies, actions) {
     execution.revalidation,
     priceAction,
   );
-  execution.writeOperationsAvailable = statusWriteAvailable || priceWriteAvailable;
+  const statusExecutionAvailable = gates.statusWriteRequested && statusWriteAvailable;
+  const priceExecutionAvailable = gates.priceWriteRequested && priceWriteAvailable;
+  execution.writeOperationsAvailableByDomain.status = statusExecutionAvailable;
+  execution.writeOperationsAvailableByDomain.price = priceExecutionAvailable;
+  execution.writeOperationsAvailable = statusExecutionAvailable || priceExecutionAvailable;
   let criticalIdentityFailure = false;
 
-  if (statusWriteAvailable) {
+  if (statusExecutionAvailable) {
     const statusAdapter =
       dependencies.statusAdapter || createTiendanubeStatusAdapter();
     await executeSingleStatusUpdate({
@@ -158,7 +173,7 @@ async function executeSingleWrites(execution, dependencies, actions) {
     criticalIdentityFailure = statusHasCriticalIdentityFailure(statusAction);
   }
 
-  if (priceWriteAvailable && !criticalIdentityFailure) {
+  if (priceExecutionAvailable && !criticalIdentityFailure) {
     const priceAdapter = dependencies.priceAdapter || createTiendanubePriceAdapter();
     await executeSinglePriceUpdate({
       plan: execution.originalPlan,
@@ -167,7 +182,7 @@ async function executeSingleWrites(execution, dependencies, actions) {
       adapter: priceAdapter,
     });
     execution.errors.push(...(priceAction.errors || []));
-  } else if (priceWriteAvailable && criticalIdentityFailure) {
+  } else if (priceExecutionAvailable && criticalIdentityFailure) {
     blockActionAfterCriticalIdentity(priceAction, statusAction);
     execution.errors.push(...(priceAction.errors || []));
   }
@@ -218,7 +233,7 @@ function blockLegacyActions(domainActions, issues) {
   }
 }
 
-async function executeLegacyWrites(execution, dependencies, actions) {
+async function executeLegacyWrites(execution, gates, dependencies, actions) {
   const statusValidation = validateLegacyStatusExecution(
     execution.originalPlan,
     execution.revalidation,
@@ -269,12 +284,19 @@ async function executeLegacyWrites(execution, dependencies, actions) {
   const priceWriteAvailable =
     localPriceIssues.length === 0 &&
     priceValidation.priceActions.some(
-    (action) => action.plannedAction === "PRICE_UPDATE",
-  );
-  execution.writeOperationsAvailable = statusWriteAvailable || priceWriteAvailable;
+      (action) => action.plannedAction === "PRICE_UPDATE",
+    );
+  const statusExecutionAvailable =
+    gates.statusWriteRequested && statusWriteAvailable;
+  const priceExecutionAvailable =
+    gates.priceWriteRequested && priceWriteAvailable;
+  execution.writeOperationsAvailableByDomain.status = statusExecutionAvailable;
+  execution.writeOperationsAvailableByDomain.price = priceExecutionAvailable;
+  execution.writeOperationsAvailable =
+    statusExecutionAvailable || priceExecutionAvailable;
 
   let statusResult = { issues: [], groupIntegrityFailed: false };
-  if (localStatusIssues.length === 0) {
+  if (gates.statusWriteRequested && localStatusIssues.length === 0) {
     const statusAdapter =
       dependencies.statusAdapter || createTiendanubeStatusAdapter();
     statusResult = await executeLegacyStatusUpdates({
@@ -289,14 +311,14 @@ async function executeLegacyWrites(execution, dependencies, actions) {
   }
 
   let priceResult = { issues: [], groupIntegrityFailed: false };
-  if (statusResult.groupIntegrityFailed) {
+  if (statusResult.groupIntegrityFailed && gates.priceWriteRequested) {
     const integrityIssue = {
       code: "GROUP_INTEGRITY_FAILED",
       message: "PRICE no se ejecuta porque STATUS detecto una inconsistencia critica del grupo.",
     };
     blockLegacyActions(priceValidation.priceActions, [integrityIssue]);
     execution.errors.push(integrityIssue);
-  } else if (localPriceIssues.length === 0) {
+  } else if (gates.priceWriteRequested && localPriceIssues.length === 0) {
     const priceAdapter = dependencies.priceAdapter || createTiendanubePriceAdapter();
     priceResult = await executeLegacyPriceUpdates({
       plan: execution.originalPlan,
@@ -323,17 +345,23 @@ async function executeSupportedWrites(execution, gates, dependencies) {
   annotateExecutionResults(actions);
 
   if (execution.originalPlan?.classification === "LEGACY_GROUP") {
-    if (!gates.writeModeRequested || execution.revalidation?.ok !== true) {
+    if (
+      (!gates.priceWriteRequested && !gates.statusWriteRequested) ||
+      execution.revalidation?.ok !== true
+    ) {
       execution.result = summarizeLegacyExecution(actions, { simulated: true });
       return;
     }
-    await executeLegacyWrites(execution, dependencies, actions);
+    await executeLegacyWrites(execution, gates, dependencies, actions);
     return;
   }
 
-  if (!gates.writeModeRequested || execution.revalidation?.ok !== true) return;
+  if (
+    (!gates.priceWriteRequested && !gates.statusWriteRequested) ||
+    execution.revalidation?.ok !== true
+  ) return;
   if (execution.originalPlan?.classification === "SINGLE") {
-    await executeSingleWrites(execution, dependencies, actions);
+    await executeSingleWrites(execution, gates, dependencies, actions);
   }
 }
 
@@ -455,8 +483,16 @@ function printExecution(execution) {
   console.log(`- classification: ${execution.classification || "NO_CLASIFICADO"}`);
   console.log(`- dryRun configurado: ${execution.dryRun}`);
   console.log(`- executionEnabled configurado: ${execution.executionEnabled}`);
+  console.log(`- priceExecutionEnabled configurado: ${execution.priceExecutionEnabled}`);
+  console.log(`- statusExecutionEnabled configurado: ${execution.statusExecutionEnabled}`);
+  console.log(`- globalWriteRequested: ${execution.globalWriteRequested}`);
+  console.log(`- priceWriteRequested: ${execution.priceWriteRequested}`);
+  console.log(`- statusWriteRequested: ${execution.statusWriteRequested}`);
   console.log(`- effectiveDryRun: ${execution.effectiveDryRun}`);
   console.log(`- writeOperationsAvailable: ${execution.writeOperationsAvailable}`);
+  console.log(
+    `- writeOperationsAvailableByDomain: ${JSON.stringify(execution.writeOperationsAvailableByDomain)}`,
+  );
   console.log(`- revalidation: ${execution.revalidation?.status || "NO_EJECUTADA"}`);
 
   console.log("\nAcciones:");

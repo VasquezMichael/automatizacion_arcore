@@ -52,14 +52,27 @@ function readExecutionGates(env = process.env) {
   const dryRun = String(env.TIENDANUBE_DRY_RUN || "true").trim().toLowerCase() !== "false";
   const executionEnabled =
     String(env.TIENDANUBE_EXECUTION_ENABLED || "false").trim().toLowerCase() === "true";
-  const writeModeRequested = !dryRun && executionEnabled;
+  const priceExecutionEnabled =
+    String(env.TIENDANUBE_PRICE_EXECUTION_ENABLED || "false").trim().toLowerCase() === "true";
+  const statusExecutionEnabled =
+    String(env.TIENDANUBE_STATUS_EXECUTION_ENABLED || "false").trim().toLowerCase() === "true";
+  const globalWriteRequested = !dryRun && executionEnabled;
+  const priceWriteRequested = globalWriteRequested && priceExecutionEnabled;
+  const statusWriteRequested = globalWriteRequested && statusExecutionEnabled;
+  const anyDomainWriteRequested = priceWriteRequested || statusWriteRequested;
 
   return {
     dryRun,
-    effectiveDryRun: !writeModeRequested,
+    effectiveDryRun: !anyDomainWriteRequested,
     executionEnabled,
-    writeOperationsAvailable: writeModeRequested,
-    writeModeRequested,
+    priceExecutionEnabled,
+    statusExecutionEnabled,
+    globalWriteRequested,
+    priceWriteRequested,
+    statusWriteRequested,
+    writeOperationsAvailable: anyDomainWriteRequested,
+    // Alias de compatibilidad; las rutas mutables usan los gates por dominio.
+    writeModeRequested: globalWriteRequested,
   };
 }
 

@@ -28,6 +28,7 @@
     "executor:test-price-legacy": "node src/executor/testLegacyPriceExecution.js",
     "executor:test-status-single": "node src/executor/testSingleStatusExecution.js",
     "executor:test-status-legacy": "node src/executor/testLegacyStatusExecution.js",
+    "executor:test-domain-gates": "node src/executor/testDomainExecutionGates.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"

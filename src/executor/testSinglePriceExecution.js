@@ -11,6 +11,13 @@ const { createTiendanubePriceAdapter } = require("./tiendanubePriceAdapter");
 const WRITE_ENV = {
   TIENDANUBE_DRY_RUN: "false",
   TIENDANUBE_EXECUTION_ENABLED: "true",
+  TIENDANUBE_PRICE_EXECUTION_ENABLED: "true",
+  TIENDANUBE_STATUS_EXECUTION_ENABLED: "false",
+};
+
+const ALL_DOMAIN_WRITE_ENV = {
+  ...WRITE_ENV,
+  TIENDANUBE_STATUS_EXECUTION_ENABLED: "true",
 };
 
 function priceUpdatePlan() {
@@ -103,17 +110,17 @@ async function testWriteGates() {
     assert.equal(result.result.writeAttempted, false, name);
     assert.equal(result.writeOperationsAvailable, false, name);
   }
-  console.log("OK A-C: ambos gates son obligatorios.");
+  console.log("OK A-C: los gates globales incompletos no habilitan PRICE.");
 }
 
-async function testBothGatesInvokeAdapter() {
+async function testPriceGatesInvokeAdapter() {
   const fake = fakePriceAdapter();
   const result = await executePrice(priceUpdatePlan(), fake);
   assert.equal(putCalls(fake).length, 1);
   assert.deepEqual(putCalls(fake)[0].payload, { price: 150 });
   assert.equal(priceAction(result).executionResult, "WRITE_SUCCEEDED");
   assert.equal(result.writeOperationsAvailable, true);
-  console.log("OK D: ambos gates habilitan solo el adaptador de precio.");
+  console.log("OK D: gates globales y PRICE habilitan el adaptador de precio.");
 }
 
 async function testMutableAdapterPayload() {
@@ -229,7 +236,7 @@ async function testStatusAndPriceCanWriteWhileImageRemainsSimulation() {
       return { id: productId, published };
     },
   };
-  const result = await executePrice(plan, fake, WRITE_ENV, { statusAdapter });
+  const result = await executePrice(plan, fake, ALL_DOMAIN_WRITE_ENV, { statusAdapter });
   assert.equal(putCalls(fake).length, 1);
   assert.equal(
     result.executionPlan.actions.find((action) => action.type === "STATUS")
@@ -319,7 +326,7 @@ async function testPutFailure() {
 
 async function main() {
   await testWriteGates();
-  await testBothGatesInvokeAdapter();
+  await testPriceGatesInvokeAdapter();
   await testMutableAdapterPayload();
   await testUnsupportedClassificationsRemainSimulation();
   await testPriceNoChangeDoesNotWrite();

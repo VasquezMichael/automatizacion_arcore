@@ -149,6 +149,8 @@ async function runControlled(plan, revalidation, options = {}) {
     env: options.env || {
       TIENDANUBE_DRY_RUN: "true",
       TIENDANUBE_EXECUTION_ENABLED: "false",
+      TIENDANUBE_PRICE_EXECUTION_ENABLED: "false",
+      TIENDANUBE_STATUS_EXECUTION_ENABLED: "false",
     },
     now: new Date("2026-09-09T12:00:00.000Z"),
     persist: false,
