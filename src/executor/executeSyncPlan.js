@@ -11,7 +11,7 @@ const {
   buildBlockedExecutionPlan,
   buildExecutionPlan,
   summarizeActions,
-  summarizeLegacyPriceActions,
+  summarizeLegacyExecution,
 } = require("./executionPlan");
 const {
   createExecutionIdentity,
@@ -30,6 +30,10 @@ const {
   executeLegacyPriceUpdates,
   validateLegacyPriceExecution,
 } = require("./legacyPriceExecution");
+const {
+  executeLegacyStatusUpdates,
+  validateLegacyStatusExecution,
+} = require("./legacyStatusExecution");
 const { createTiendanubePriceAdapter } = require("./tiendanubePriceAdapter");
 const { createTiendanubeStatusAdapter } = require("./tiendanubeStatusAdapter");
 
@@ -191,8 +195,37 @@ async function executeSingleWrites(execution, gates, dependencies, actions) {
   updateFinalVerify(actions, execution.result.executionStatus);
 }
 
-function blockLegacyPriceActions(priceActions, issues) {
-  for (const action of priceActions) {
+const GLOBAL_LEGACY_ISSUES = new Set([
+  "LEGACY_CLASSIFICATION_REQUIRED",
+  "LEGACY_SUPPLIER_RESOLUTION_BLOCKED",
+  "LEGACY_GROUP_INVALID",
+  "LEGACY_GROUP_NORMALIZED_SKU_MISMATCH",
+  "LEGACY_EXPECTED_MATCHES_INVALID",
+  "LEGACY_GROUP_COUNT_MISMATCH",
+  "LEGACY_GROUP_PAIR_MISMATCH",
+  "LEGACY_GROUP_SKU_MISMATCH",
+  "LEGACY_STATUS_CLASSIFICATION_INVALID",
+  "LEGACY_STATUS_SUPPLIER_RESOLUTION_INVALID",
+  "LEGACY_STATUS_REVALIDATION_FAILED",
+  "LEGACY_STATUS_NORMALIZED_SKU_MISMATCH",
+  "LEGACY_STATUS_EXPECTED_MATCHES_INVALID",
+  "LEGACY_STATUS_COUNT_MISMATCH",
+  "LEGACY_STATUS_PAIR_MISMATCH",
+  "LEGACY_STATUS_PUBLICATION_SKU_MISMATCH",
+]);
+
+function uniqueIssues(issues) {
+  const seen = new Set();
+  return issues.filter((item) => {
+    const key = `${item.code}:${JSON.stringify(item.details || null)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function blockLegacyActions(domainActions, issues) {
+  for (const action of domainActions) {
     action.simulationResult = "BLOCKED";
     action.executionResult = "BLOCKED";
     action.errors = action.errors || [];
@@ -200,37 +233,110 @@ function blockLegacyPriceActions(priceActions, issues) {
   }
 }
 
-async function executeLegacyWrite(execution, dependencies, actions) {
-  const validation = validateLegacyPriceExecution(
+async function executeLegacyWrites(execution, gates, dependencies, actions) {
+  const statusValidation = validateLegacyStatusExecution(
     execution.originalPlan,
     execution.revalidation,
     actions,
   );
-  if (!validation.ok) {
-    blockLegacyPriceActions(validation.priceActions, validation.issues);
-    execution.errors.push(...validation.issues);
-    execution.result = summarizeLegacyPriceActions(actions, {
-      groupIntegrityFailed: true,
+  const priceValidation = validateLegacyPriceExecution(
+    execution.originalPlan,
+    execution.revalidation,
+    actions,
+  );
+  const globalIssues = uniqueIssues(
+    [...statusValidation.issues, ...priceValidation.issues].filter((item) =>
+      GLOBAL_LEGACY_ISSUES.has(item.code),
+    ),
+  );
+
+  if (globalIssues.length > 0) {
+    blockLegacyActions(statusValidation.statusActions, globalIssues);
+    blockLegacyActions(priceValidation.priceActions, globalIssues);
+    execution.errors.push(...globalIssues);
+    execution.result = summarizeLegacyExecution(actions, {
+      globalIntegrityFailed: true,
     });
     updateFinalVerify(actions, execution.result.executionStatus);
     return;
   }
 
-  execution.writeOperationsAvailable = validation.priceActions.some(
-    (action) => action.plannedAction === "PRICE_UPDATE",
+  const localStatusIssues = statusValidation.issues.filter(
+    (item) => !GLOBAL_LEGACY_ISSUES.has(item.code),
   );
-  execution.writeOperationsAvailableByDomain.price = execution.writeOperationsAvailable;
-  const adapter = dependencies.priceAdapter || createTiendanubePriceAdapter();
-  const legacyResult = await executeLegacyPriceUpdates({
-    plan: execution.originalPlan,
-    actions: validation.priceActions,
-    adapter,
+  const localPriceIssues = priceValidation.issues.filter(
+    (item) => !GLOBAL_LEGACY_ISSUES.has(item.code),
+  );
+  if (localStatusIssues.length > 0) {
+    blockLegacyActions(statusValidation.statusActions, localStatusIssues);
+    execution.errors.push(...localStatusIssues);
+  }
+  if (localPriceIssues.length > 0) {
+    blockLegacyActions(priceValidation.priceActions, localPriceIssues);
+    execution.errors.push(...localPriceIssues);
+  }
+
+  const statusWriteAvailable =
+    localStatusIssues.length === 0 &&
+    statusValidation.statusActions.some((action) =>
+      ["PUBLISH", "UNPUBLISH"].includes(action.plannedAction),
+    );
+  const priceWriteAvailable =
+    localPriceIssues.length === 0 &&
+    priceValidation.priceActions.some(
+      (action) => action.plannedAction === "PRICE_UPDATE",
+    );
+  const statusExecutionAvailable =
+    gates.statusWriteRequested && statusWriteAvailable;
+  const priceExecutionAvailable =
+    gates.priceWriteRequested && priceWriteAvailable;
+  execution.writeOperationsAvailableByDomain.status = statusExecutionAvailable;
+  execution.writeOperationsAvailableByDomain.price = priceExecutionAvailable;
+  execution.writeOperationsAvailable =
+    statusExecutionAvailable || priceExecutionAvailable;
+
+  let statusResult = { issues: [], groupIntegrityFailed: false };
+  if (gates.statusWriteRequested && localStatusIssues.length === 0) {
+    const statusAdapter =
+      dependencies.statusAdapter || createTiendanubeStatusAdapter();
+    statusResult = await executeLegacyStatusUpdates({
+      plan: execution.originalPlan,
+      actions: statusValidation.statusActions,
+      adapter: statusAdapter,
+    });
+    execution.errors.push(
+      ...statusValidation.statusActions.flatMap((action) => action.errors || []),
+      ...statusResult.issues,
+    );
+  }
+
+  let priceResult = { issues: [], groupIntegrityFailed: false };
+  if (statusResult.groupIntegrityFailed && gates.priceWriteRequested) {
+    const integrityIssue = {
+      code: "GROUP_INTEGRITY_FAILED",
+      message: "PRICE no se ejecuta porque STATUS detecto una inconsistencia critica del grupo.",
+    };
+    blockLegacyActions(priceValidation.priceActions, [integrityIssue]);
+    execution.errors.push(integrityIssue);
+  } else if (gates.priceWriteRequested && localPriceIssues.length === 0) {
+    const priceAdapter = dependencies.priceAdapter || createTiendanubePriceAdapter();
+    priceResult = await executeLegacyPriceUpdates({
+      plan: execution.originalPlan,
+      actions: priceValidation.priceActions,
+      adapter: priceAdapter,
+    });
+    execution.errors.push(
+      ...priceValidation.priceActions.flatMap((action) => action.errors || []),
+      ...priceResult.issues,
+    );
+  }
+
+  execution.result = summarizeLegacyExecution(actions, {
+    globalIntegrityFailed:
+      statusResult.groupIntegrityFailed || priceResult.groupIntegrityFailed,
+    statusIntegrityFailed: statusResult.groupIntegrityFailed,
+    priceIntegrityFailed: priceResult.groupIntegrityFailed,
   });
-  execution.errors.push(
-    ...validation.priceActions.flatMap((action) => action.errors || []),
-    ...legacyResult.issues,
-  );
-  execution.result = summarizeLegacyPriceActions(actions, legacyResult);
   updateFinalVerify(actions, execution.result.executionStatus);
 }
 
@@ -239,11 +345,14 @@ async function executeSupportedWrites(execution, gates, dependencies) {
   annotateExecutionResults(actions);
 
   if (execution.originalPlan?.classification === "LEGACY_GROUP") {
-    if (!gates.priceWriteRequested || execution.revalidation?.ok !== true) {
-      execution.result = summarizeLegacyPriceActions(actions, { simulated: true });
+    if (
+      (!gates.priceWriteRequested && !gates.statusWriteRequested) ||
+      execution.revalidation?.ok !== true
+    ) {
+      execution.result = summarizeLegacyExecution(actions, { simulated: true });
       return;
     }
-    await executeLegacyWrite(execution, dependencies, actions);
+    await executeLegacyWrites(execution, gates, dependencies, actions);
     return;
   }
 
@@ -398,7 +507,14 @@ function printExecution(execution) {
 
   console.log("\nResumen:");
   for (const [key, value] of Object.entries(execution.result || {})) {
-    console.log(`- ${key}: ${value}`);
+    if (value && typeof value === "object") {
+      console.log(`- ${key}:`);
+      for (const [nestedKey, nestedValue] of Object.entries(value)) {
+        console.log(`  - ${nestedKey}: ${nestedValue}`);
+      }
+    } else {
+      console.log(`- ${key}: ${value}`);
+    }
   }
   console.log(`- warnings: ${execution.warnings.length}`);
   console.log(`- errors: ${execution.errors.length}`);

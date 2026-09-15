@@ -86,7 +86,7 @@ function isEligibleSingleStatusUpdate(plan, revalidation, action) {
   );
 }
 
-async function executeSingleStatusUpdate({ plan, action, adapter }) {
+async function executeStatusPublication({ plan, action, adapter }) {
   const targetPublished = action.desiredState.published;
   let product;
 
@@ -189,7 +189,12 @@ async function executeSingleStatusUpdate({ plan, action, adapter }) {
   });
 }
 
+async function executeSingleStatusUpdate(options) {
+  return executeStatusPublication(options);
+}
+
 module.exports = {
+  executeStatusPublication,
   executeSingleStatusUpdate,
   isEligibleSingleStatusUpdate,
   validateStatusIdentity,

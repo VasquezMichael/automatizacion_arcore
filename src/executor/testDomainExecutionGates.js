@@ -9,6 +9,7 @@ const {
 } = require("./testExecutor");
 const {
   fakeLegacyAdapter,
+  fakeLegacyStatusAdapter,
   legacyPlan,
   legacyRevalidation,
   putCalls: legacyPricePutCalls,
@@ -205,32 +206,27 @@ async function testLegacyDomainSupport() {
       action: "UNPUBLISH",
     })),
   };
-  const statusCalls = [];
+  const statusFake = fakeLegacyStatusAdapter(statusPlan);
   const statusResult = await runControlled(
     statusPlan,
     legacyRevalidation(statusPlan),
     {
       env: domainEnv({ status: true }),
-      statusAdapter: {
-        async getProduct() {
-          statusCalls.push("GET_STATUS");
-          throw new Error("STATUS LEGACY_GROUP no debe consultar el adapter mutable.");
-        },
-        async updateProductPublished() {
-          statusCalls.push("PUT_STATUS");
-          throw new Error("STATUS LEGACY_GROUP no debe escribir.");
-        },
-      },
+      statusAdapter: statusFake.adapter,
     },
   );
-  assert.equal(statusCalls.length, 0);
+  assert.equal(
+    statusFake.calls.filter((call) => call.method === "PUT_STATUS").length,
+    3,
+  );
   assert(
     statusResult.executionPlan.actions
       .filter((item) => item.type === "STATUS")
-      .every((item) => item.executionResult === "SIMULATED"),
+      .every((item) => item.executionResult === "WRITE_SUCCEEDED"),
   );
-  assert.equal(statusResult.writeOperationsAvailableByDomain.status, false);
-  console.log("OK 9/11: PRICE legacy conserva writes; STATUS legacy sigue simulado.");
+  assert.equal(statusResult.writeOperationsAvailableByDomain.status, true);
+  assert.equal(statusResult.writeOperationsAvailableByDomain.price, false);
+  console.log("OK 9/11: PRICE y STATUS legacy conservan gates independientes.");
 }
 
 async function testImageAndCreateRemainSimulation() {
