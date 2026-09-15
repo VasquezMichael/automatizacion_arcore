@@ -26,6 +26,12 @@ function publicationMap(planGroup) {
   return new Map((planGroup?.publications || []).map((item) => [pairKey(item), item]));
 }
 
+function sameImageIds(first, second) {
+  const normalize = (items) =>
+    (Array.isArray(items) ? items : []).map(String).sort();
+  return JSON.stringify(normalize(first)) === JSON.stringify(normalize(second));
+}
+
 function actionBase(type, planned, current) {
   return {
     type,
@@ -126,6 +132,8 @@ function buildImageAction(planned, current) {
   action.currentState = {
     imageId: current?.imageId ?? null,
     exactHash: current?.tiendanubeHash ?? null,
+    imageCount: current?.tiendanubeImageCount ?? null,
+    imageIds: current?.tiendanubeImageIds ?? null,
   };
   action.desiredState = {
     exactHash: planned?.sourceHash ?? null,
@@ -161,6 +169,24 @@ function buildImageAction(planned, current) {
           "IMAGE",
           action,
           "La imagen principal cambio desde la planificacion.",
+        ),
+      };
+    }
+    if (
+      planned.sourceHash !== current.sourceHash ||
+      planned.tiendanubeHash !== current.tiendanubeHash ||
+      planned.tiendanubeImageCount !== current.tiendanubeImageCount ||
+      !sameImageIds(
+        planned.tiendanubeImageIds,
+        current.tiendanubeImageIds,
+      )
+    ) {
+      return {
+        action: { ...action, simulationResult: "REVALIDATION_FAILED" },
+        issue: stateChangedIssue(
+          "IMAGE",
+          action,
+          "La fuente o el conjunto de imagenes cambio desde la planificacion.",
         ),
       };
     }
@@ -315,6 +341,9 @@ function summarizeActions(actions, blocked, { executionMode = false } = {}) {
   const verificationFailedActions = domainActions.filter(
     (action) => action.executionResult === "WRITE_VERIFICATION_FAILED",
   ).length;
+  const partialFailureActions = domainActions.filter(
+    (action) => action.executionResult === "PARTIAL_FAILURE",
+  ).length;
   const successfulWrites = domainActions.filter(
     (action) => action.executionResult === "WRITE_SUCCEEDED",
   ).length;
@@ -323,7 +352,7 @@ function summarizeActions(actions, blocked, { executionMode = false } = {}) {
 
   let executionStatus = ExecutionStatus.NO_CHANGES;
   if (blocked) executionStatus = ExecutionStatus.BLOCKED;
-  else if (verificationFailedActions > 0) {
+  else if (verificationFailedActions > 0 || partialFailureActions > 0) {
     executionStatus = ExecutionStatus.PARTIAL_FAILURE;
   }
   else if (failedActions > 0) {
@@ -348,7 +377,8 @@ function summarizeActions(actions, blocked, { executionMode = false } = {}) {
     wouldWrite,
     skippedAlreadyApplied,
     blockedActions,
-    failedActions: failedActions + verificationFailedActions,
+    failedActions:
+      failedActions + verificationFailedActions + partialFailureActions,
     successfulWrites,
     writeAttempted: writeActions.length > 0,
     writeSucceeded:

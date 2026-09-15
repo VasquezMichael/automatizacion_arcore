@@ -27,6 +27,10 @@ const {
   isEligibleSingleStatusUpdate,
 } = require("./singleStatusExecution");
 const {
+  executeSingleImageReplace,
+  isEligibleSingleImageReplace,
+} = require("./singleImageExecution");
+const {
   executeLegacyPriceUpdates,
   validateLegacyPriceExecution,
 } = require("./legacyPriceExecution");
@@ -36,6 +40,7 @@ const {
 } = require("./legacyStatusExecution");
 const { createTiendanubePriceAdapter } = require("./tiendanubePriceAdapter");
 const { createTiendanubeStatusAdapter } = require("./tiendanubeStatusAdapter");
+const { createTiendanubeImageAdapter } = require("./tiendanubeImageAdapter");
 
 function serializeError(error) {
   return {
@@ -65,9 +70,11 @@ function baseExecution(sourceSku, gates, identity) {
     executionEnabled: gates.executionEnabled,
     priceExecutionEnabled: gates.priceExecutionEnabled,
     statusExecutionEnabled: gates.statusExecutionEnabled,
+    imageExecutionEnabled: gates.imageExecutionEnabled,
     globalWriteRequested: gates.globalWriteRequested,
     priceWriteRequested: gates.priceWriteRequested,
     statusWriteRequested: gates.statusWriteRequested,
+    imageWriteRequested: gates.imageWriteRequested,
     writeModeRequested: gates.writeModeRequested,
     writeOperationsAvailable: false,
     writeOperationsAvailableByDomain: {
@@ -124,6 +131,15 @@ function statusHasCriticalIdentityFailure(action) {
   );
 }
 
+function priceHasCriticalIdentityFailure(action) {
+  return (
+    actionHasError(action, "PRICE_PREWRITE_READ_FAILED") ||
+    actionHasError(action, "PRICE_PREWRITE_IDENTITY_MISMATCH") ||
+    (actionHasError(action, "PRICE_WRITE_VERIFICATION_FAILED") &&
+      action.errors.some((error) => error.details?.identity))
+  );
+}
+
 function blockActionAfterCriticalIdentity(action, sourceAction) {
   if (!action || action.executionResult === "BLOCKED") return;
   const error = {
@@ -143,6 +159,7 @@ function blockActionAfterCriticalIdentity(action, sourceAction) {
 async function executeSingleWrites(execution, gates, dependencies, actions) {
   const statusAction = actions.find((action) => action.type === "STATUS");
   const priceAction = actions.find((action) => action.type === "PRICE");
+  const imageAction = actions.find((action) => action.type === "IMAGE");
   const statusWriteAvailable = isEligibleSingleStatusUpdate(
     execution.originalPlan,
     execution.revalidation,
@@ -153,12 +170,21 @@ async function executeSingleWrites(execution, gates, dependencies, actions) {
     execution.revalidation,
     priceAction,
   );
+  const imageWriteAvailable = isEligibleSingleImageReplace(
+    execution.originalPlan,
+    execution.revalidation,
+    imageAction,
+  );
   const statusExecutionAvailable = gates.statusWriteRequested && statusWriteAvailable;
   const priceExecutionAvailable = gates.priceWriteRequested && priceWriteAvailable;
+  const imageExecutionAvailable = gates.imageWriteRequested && imageWriteAvailable;
   execution.writeOperationsAvailableByDomain.status = statusExecutionAvailable;
   execution.writeOperationsAvailableByDomain.price = priceExecutionAvailable;
-  execution.writeOperationsAvailable = statusExecutionAvailable || priceExecutionAvailable;
+  execution.writeOperationsAvailableByDomain.image = imageExecutionAvailable;
+  execution.writeOperationsAvailable =
+    statusExecutionAvailable || priceExecutionAvailable || imageExecutionAvailable;
   let criticalIdentityFailure = false;
+  let criticalSourceAction = null;
 
   if (statusExecutionAvailable) {
     const statusAdapter =
@@ -171,6 +197,7 @@ async function executeSingleWrites(execution, gates, dependencies, actions) {
     });
     execution.errors.push(...(statusAction.errors || []));
     criticalIdentityFailure = statusHasCriticalIdentityFailure(statusAction);
+    if (criticalIdentityFailure) criticalSourceAction = statusAction;
   }
 
   if (priceExecutionAvailable && !criticalIdentityFailure) {
@@ -182,9 +209,26 @@ async function executeSingleWrites(execution, gates, dependencies, actions) {
       adapter: priceAdapter,
     });
     execution.errors.push(...(priceAction.errors || []));
+    criticalIdentityFailure = priceHasCriticalIdentityFailure(priceAction);
+    if (criticalIdentityFailure) criticalSourceAction = priceAction;
   } else if (priceExecutionAvailable && criticalIdentityFailure) {
     blockActionAfterCriticalIdentity(priceAction, statusAction);
     execution.errors.push(...(priceAction.errors || []));
+  }
+
+  if (imageExecutionAvailable && !criticalIdentityFailure) {
+    const imageAdapter =
+      dependencies.imageAdapter || createTiendanubeImageAdapter();
+    await executeSingleImageReplace({
+      plan: execution.originalPlan,
+      action: imageAction,
+      adapter: imageAdapter,
+      imageTools: dependencies.imageTools,
+    });
+    execution.errors.push(...(imageAction.errors || []));
+  } else if (imageExecutionAvailable && criticalIdentityFailure) {
+    blockActionAfterCriticalIdentity(imageAction, criticalSourceAction);
+    execution.errors.push(...(imageAction.errors || []));
   }
 
   execution.result = summarizeActions(
@@ -357,7 +401,9 @@ async function executeSupportedWrites(execution, gates, dependencies) {
   }
 
   if (
-    (!gates.priceWriteRequested && !gates.statusWriteRequested) ||
+    (!gates.priceWriteRequested &&
+      !gates.statusWriteRequested &&
+      !gates.imageWriteRequested) ||
     execution.revalidation?.ok !== true
   ) return;
   if (execution.originalPlan?.classification === "SINGLE") {
@@ -485,9 +531,11 @@ function printExecution(execution) {
   console.log(`- executionEnabled configurado: ${execution.executionEnabled}`);
   console.log(`- priceExecutionEnabled configurado: ${execution.priceExecutionEnabled}`);
   console.log(`- statusExecutionEnabled configurado: ${execution.statusExecutionEnabled}`);
+  console.log(`- imageExecutionEnabled configurado: ${execution.imageExecutionEnabled}`);
   console.log(`- globalWriteRequested: ${execution.globalWriteRequested}`);
   console.log(`- priceWriteRequested: ${execution.priceWriteRequested}`);
   console.log(`- statusWriteRequested: ${execution.statusWriteRequested}`);
+  console.log(`- imageWriteRequested: ${execution.imageWriteRequested}`);
   console.log(`- effectiveDryRun: ${execution.effectiveDryRun}`);
   console.log(`- writeOperationsAvailable: ${execution.writeOperationsAvailable}`);
   console.log(
