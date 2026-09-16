@@ -235,7 +235,7 @@ async function testLegacyDomainSupport() {
   console.log("OK 9/11: PRICE y STATUS legacy conservan gates independientes.");
 }
 
-async function testImageAndCreateRemainSimulation() {
+async function testImageGateAndCreateRemainIsolated() {
   const imagePlan = basePlan();
   imagePlan.plans.image.action = "IMAGE_REPLACE";
   imagePlan.plans.image.publications[0].action = "IMAGE_REPLACE";
@@ -261,7 +261,7 @@ async function testImageAndCreateRemainSimulation() {
   );
   assert.equal(action(creationResult, "CREATE_PRODUCT").executionResult, "SIMULATED");
   assert.equal(creationResult.writeOperationsAvailableByDomain.create, false);
-  console.log("OK 12: IMAGE y CREATE_SINGLE permanecen sin rutas de escritura.");
+  console.log("OK 12: IMAGE requiere su gate y CREATE_SINGLE permanece sin writes.");
 }
 
 async function main() {
@@ -270,7 +270,7 @@ async function main() {
   await testStatusDomainIsolation();
   await testBothDomains();
   await testLegacyDomainSupport();
-  await testImageAndCreateRemainSimulation();
+  await testImageGateAndCreateRemainIsolated();
   console.log("Resultado: OK. Gates PRICE, STATUS e IMAGE aislados con adapters mock.");
 }
 

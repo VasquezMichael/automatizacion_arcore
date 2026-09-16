@@ -38,6 +38,10 @@ const {
   executeLegacyStatusUpdates,
   validateLegacyStatusExecution,
 } = require("./legacyStatusExecution");
+const {
+  executeLegacyImageUpdates,
+  validateLegacyImageExecution,
+} = require("./legacyImageExecution");
 const { createTiendanubePriceAdapter } = require("./tiendanubePriceAdapter");
 const { createTiendanubeStatusAdapter } = require("./tiendanubeStatusAdapter");
 const { createTiendanubeImageAdapter } = require("./tiendanubeImageAdapter");
@@ -288,18 +292,36 @@ async function executeLegacyWrites(execution, gates, dependencies, actions) {
     execution.revalidation,
     actions,
   );
+  const imageValidation = validateLegacyImageExecution(
+    execution.originalPlan,
+    execution.revalidation,
+    actions,
+  );
+  const imageDomainApplicable =
+    execution.originalPlan?.plans?.image?.action !== "NO_SOURCE_IMAGE";
   const globalIssues = uniqueIssues(
-    [...statusValidation.issues, ...priceValidation.issues].filter((item) =>
-      GLOBAL_LEGACY_ISSUES.has(item.code),
-    ),
+    [
+      ...statusValidation.issues,
+      ...priceValidation.issues,
+    ].filter((item) => GLOBAL_LEGACY_ISSUES.has(item.code)),
   );
 
   if (globalIssues.length > 0) {
-    blockLegacyActions(statusValidation.statusActions, globalIssues);
-    blockLegacyActions(priceValidation.priceActions, globalIssues);
-    execution.errors.push(...globalIssues);
+    const blockingIssues = [
+      {
+        code: "GROUP_INTEGRITY_FAILED",
+        message: "El grupo legacy no coincide con la identidad estructural validada.",
+      },
+      ...globalIssues,
+    ];
+    blockLegacyActions(statusValidation.statusActions, blockingIssues);
+    blockLegacyActions(priceValidation.priceActions, blockingIssues);
+    blockLegacyActions(imageValidation.imageActions, blockingIssues);
+    execution.errors.push(...blockingIssues);
     execution.result = summarizeLegacyExecution(actions, {
       globalIntegrityFailed: true,
+      expectedImagePublicationCount: imageValidation.expectedMatches,
+      actualImagePublicationCount: imageValidation.actualMatches,
     });
     updateFinalVerify(actions, execution.result.executionStatus);
     return;
@@ -311,6 +333,12 @@ async function executeLegacyWrites(execution, gates, dependencies, actions) {
   const localPriceIssues = priceValidation.issues.filter(
     (item) => !GLOBAL_LEGACY_ISSUES.has(item.code),
   );
+  const localImageIssues = imageValidation.issues.filter(
+    (item) => !GLOBAL_LEGACY_ISSUES.has(item.code),
+  );
+  const activeLocalImageIssues = gates.imageWriteRequested && imageDomainApplicable
+    ? localImageIssues
+    : [];
   if (localStatusIssues.length > 0) {
     blockLegacyActions(statusValidation.statusActions, localStatusIssues);
     execution.errors.push(...localStatusIssues);
@@ -318,6 +346,10 @@ async function executeLegacyWrites(execution, gates, dependencies, actions) {
   if (localPriceIssues.length > 0) {
     blockLegacyActions(priceValidation.priceActions, localPriceIssues);
     execution.errors.push(...localPriceIssues);
+  }
+  if (activeLocalImageIssues.length > 0) {
+    blockLegacyActions(imageValidation.imageActions, activeLocalImageIssues);
+    execution.errors.push(...activeLocalImageIssues);
   }
 
   const statusWriteAvailable =
@@ -330,14 +362,23 @@ async function executeLegacyWrites(execution, gates, dependencies, actions) {
     priceValidation.priceActions.some(
       (action) => action.plannedAction === "PRICE_UPDATE",
     );
+  const imageWriteAvailable =
+    imageDomainApplicable &&
+    activeLocalImageIssues.length === 0 &&
+    imageValidation.imageActions.some(
+      (action) => action.plannedAction === "IMAGE_REPLACE",
+    );
   const statusExecutionAvailable =
     gates.statusWriteRequested && statusWriteAvailable;
   const priceExecutionAvailable =
     gates.priceWriteRequested && priceWriteAvailable;
+  const imageExecutionAvailable =
+    gates.imageWriteRequested && imageWriteAvailable;
   execution.writeOperationsAvailableByDomain.status = statusExecutionAvailable;
   execution.writeOperationsAvailableByDomain.price = priceExecutionAvailable;
+  execution.writeOperationsAvailableByDomain.image = imageExecutionAvailable;
   execution.writeOperationsAvailable =
-    statusExecutionAvailable || priceExecutionAvailable;
+    statusExecutionAvailable || priceExecutionAvailable || imageExecutionAvailable;
 
   let statusResult = { issues: [], groupIntegrityFailed: false };
   if (gates.statusWriteRequested && localStatusIssues.length === 0) {
@@ -375,11 +416,47 @@ async function executeLegacyWrites(execution, gates, dependencies, actions) {
     );
   }
 
+  let imageResult = { issues: [], groupIntegrityFailed: false };
+  const previousIntegrityFailed =
+    statusResult.groupIntegrityFailed || priceResult.groupIntegrityFailed;
+  if (previousIntegrityFailed && gates.imageWriteRequested) {
+    const integrityIssue = {
+      code: "GROUP_INTEGRITY_FAILED",
+      message:
+        "IMAGE no se ejecuta porque otro dominio detecto una inconsistencia critica del grupo.",
+    };
+    blockLegacyActions(imageValidation.imageActions, [integrityIssue]);
+    execution.errors.push(integrityIssue);
+    imageResult.groupIntegrityFailed = true;
+  } else if (
+    gates.imageWriteRequested &&
+    imageDomainApplicable &&
+    activeLocalImageIssues.length === 0
+  ) {
+    const imageAdapter =
+      dependencies.imageAdapter || createTiendanubeImageAdapter();
+    imageResult = await executeLegacyImageUpdates({
+      plan: execution.originalPlan,
+      actions: imageValidation.imageActions,
+      adapter: imageAdapter,
+      imageTools: dependencies.imageTools,
+    });
+    execution.errors.push(
+      ...imageValidation.imageActions.flatMap((action) => action.errors || []),
+      ...imageResult.issues,
+    );
+  }
+
   execution.result = summarizeLegacyExecution(actions, {
     globalIntegrityFailed:
-      statusResult.groupIntegrityFailed || priceResult.groupIntegrityFailed,
+      statusResult.groupIntegrityFailed ||
+      priceResult.groupIntegrityFailed ||
+      imageResult.groupIntegrityFailed,
     statusIntegrityFailed: statusResult.groupIntegrityFailed,
     priceIntegrityFailed: priceResult.groupIntegrityFailed,
+    imageIntegrityFailed: imageResult.groupIntegrityFailed,
+    expectedImagePublicationCount: imageValidation.expectedMatches,
+    actualImagePublicationCount: imageValidation.actualMatches,
   });
   updateFinalVerify(actions, execution.result.executionStatus);
 }
@@ -390,7 +467,9 @@ async function executeSupportedWrites(execution, gates, dependencies) {
 
   if (execution.originalPlan?.classification === "LEGACY_GROUP") {
     if (
-      (!gates.priceWriteRequested && !gates.statusWriteRequested) ||
+      (!gates.priceWriteRequested &&
+        !gates.statusWriteRequested &&
+        !gates.imageWriteRequested) ||
       execution.revalidation?.ok !== true
     ) {
       execution.result = summarizeLegacyExecution(actions, { simulated: true });

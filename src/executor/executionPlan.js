@@ -466,12 +466,113 @@ function summarizeLegacyStatusActions(actions, options = {}) {
   return summarizeLegacyDomainActions(actions, "STATUS", options);
 }
 
+function summarizeLegacyImageActions(
+  actions,
+  {
+    groupIntegrityFailed = false,
+    simulated = false,
+    expectedPublicationCount,
+    actualPublicationCount,
+  } = {},
+) {
+  const imageActions = actions.filter((action) => action.type === "IMAGE");
+  const eligibleCount = imageActions.filter(
+    (action) => action.plannedAction === "IMAGE_REPLACE",
+  ).length;
+  const skippedAlreadyAppliedCount = imageActions.filter(
+    (action) => action.executionResult === "SKIPPED_ALREADY_APPLIED",
+  ).length;
+  const uploadAttemptedCount = imageActions.filter(
+    (action) => action.uploadAttempted,
+  ).length;
+  const uploadSucceededCount = imageActions.filter(
+    (action) => action.uploadSucceeded,
+  ).length;
+  const uploadVerifiedCount = imageActions.filter(
+    (action) => action.uploadVerified,
+  ).length;
+  const deleteAttemptedCount = imageActions.filter(
+    (action) => action.deleteAttempted,
+  ).length;
+  const deleteSucceededCount = imageActions.filter(
+    (action) => action.deleteSucceeded,
+  ).length;
+  const verifiedCount = imageActions.filter(
+    (action) =>
+      action.verified || action.executionResult === "SKIPPED_ALREADY_APPLIED",
+  ).length;
+  const updatedCount = imageActions.filter((action) => action.updated).length;
+  const failedCount = imageActions.filter((action) =>
+    ["WRITE_FAILED", "WRITE_VERIFICATION_FAILED"].includes(
+      action.executionResult,
+    ),
+  ).length;
+  const partialFailureCount = imageActions.filter(
+    (action) => action.executionResult === "PARTIAL_FAILURE",
+  ).length;
+  const blockedCount = imageActions.filter(
+    (action) => action.executionResult === "BLOCKED",
+  ).length;
+  const wouldWrite = imageActions.filter(
+    (action) => action.simulationResult === "WOULD_REPLACE",
+  ).length;
+
+  let executionStatus = ExecutionStatus.NO_CHANGES;
+  if (simulated) {
+    if (blockedCount > 0) executionStatus = ExecutionStatus.SIMULATED_WITH_BLOCKS;
+    else if (wouldWrite > 0) executionStatus = ExecutionStatus.SIMULATED;
+  } else if (groupIntegrityFailed || blockedCount > 0) {
+    executionStatus = uploadAttemptedCount > 0
+      ? ExecutionStatus.PARTIAL_FAILURE
+      : ExecutionStatus.BLOCKED;
+  } else if (failedCount > 0 || partialFailureCount > 0) {
+    executionStatus = ExecutionStatus.PARTIAL_FAILURE;
+  } else if (uploadAttemptedCount > 0) {
+    executionStatus = verifiedCount === imageActions.length
+      ? ExecutionStatus.SUCCESS
+      : ExecutionStatus.PARTIAL_FAILURE;
+  }
+
+  const allVerified =
+    imageActions.length > 0 && verifiedCount === imageActions.length;
+  return {
+    executionStatus,
+    expectedPublicationCount:
+      expectedPublicationCount ?? imageActions.length,
+    actualPublicationCount:
+      actualPublicationCount ?? imageActions.length,
+    eligibleCount,
+    skippedAlreadyAppliedCount,
+    uploadAttemptedCount,
+    uploadSucceededCount,
+    uploadVerifiedCount,
+    deleteAttemptedCount,
+    deleteSucceededCount,
+    verifiedCount,
+    updatedCount,
+    failedCount,
+    partialFailureCount,
+    blockedCount,
+    verified: allVerified && !groupIntegrityFailed,
+    updated:
+      allVerified &&
+      updatedCount > 0 &&
+      failedCount === 0 &&
+      partialFailureCount === 0 &&
+      blockedCount === 0 &&
+      !groupIntegrityFailed,
+  };
+}
+
 function summarizeLegacyExecution(
   actions,
   {
     globalIntegrityFailed = false,
     statusIntegrityFailed = false,
     priceIntegrityFailed = false,
+    imageIntegrityFailed = false,
+    expectedImagePublicationCount,
+    actualImagePublicationCount,
     simulated = false,
   } = {},
 ) {
@@ -483,12 +584,19 @@ function summarizeLegacyExecution(
     groupIntegrityFailed: globalIntegrityFailed || priceIntegrityFailed,
     simulated,
   });
+  const imageSummary = summarizeLegacyImageActions(actions, {
+    groupIntegrityFailed: globalIntegrityFailed || imageIntegrityFailed,
+    simulated,
+    expectedPublicationCount: expectedImagePublicationCount,
+    actualPublicationCount: actualImagePublicationCount,
+  });
   const overall = summarizeActions(actions, globalIntegrityFailed, {
     executionMode: !simulated,
   });
   const domainStatuses = [
     statusSummary.executionStatus,
     priceSummary.executionStatus,
+    imageSummary.executionStatus,
   ];
   let executionStatus = overall.executionStatus;
 
@@ -517,15 +625,18 @@ function summarizeLegacyExecution(
   }
 
   const domainActions = actions.filter((action) =>
-    ["STATUS", "PRICE"].includes(action.type),
+    ["STATUS", "PRICE", "IMAGE"].includes(action.type),
   );
   const attemptedActions = domainActions.filter((action) => action.writeAttempted);
   const fullyVerified =
-    statusSummary.verified && priceSummary.verified && !globalIntegrityFailed;
+    statusSummary.verified &&
+    priceSummary.verified &&
+    imageSummary.verified &&
+    !globalIntegrityFailed;
   const fullyUpdated =
     executionStatus === ExecutionStatus.SUCCESS &&
     fullyVerified &&
-    (statusSummary.updated || priceSummary.updated);
+    (statusSummary.updated || priceSummary.updated || imageSummary.updated);
 
   return {
     ...priceSummary,
@@ -544,6 +655,7 @@ function summarizeLegacyExecution(
     aggregateVerifiedCount: domainActions.filter((action) => action.verified).length,
     statusSummary,
     priceSummary,
+    imageSummary,
   };
 }
 
@@ -641,6 +753,7 @@ module.exports = {
   buildExecutionPlan,
   summarizeActions,
   summarizeLegacyExecution,
+  summarizeLegacyImageActions,
   summarizeLegacyPriceActions,
   summarizeLegacyStatusActions,
 };
