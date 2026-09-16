@@ -56,10 +56,14 @@ function readExecutionGates(env = process.env) {
     String(env.TIENDANUBE_PRICE_EXECUTION_ENABLED || "false").trim().toLowerCase() === "true";
   const statusExecutionEnabled =
     String(env.TIENDANUBE_STATUS_EXECUTION_ENABLED || "false").trim().toLowerCase() === "true";
+  const imageExecutionEnabled =
+    String(env.TIENDANUBE_IMAGE_EXECUTION_ENABLED || "false").trim().toLowerCase() === "true";
   const globalWriteRequested = !dryRun && executionEnabled;
   const priceWriteRequested = globalWriteRequested && priceExecutionEnabled;
   const statusWriteRequested = globalWriteRequested && statusExecutionEnabled;
-  const anyDomainWriteRequested = priceWriteRequested || statusWriteRequested;
+  const imageWriteRequested = globalWriteRequested && imageExecutionEnabled;
+  const anyDomainWriteRequested =
+    priceWriteRequested || statusWriteRequested || imageWriteRequested;
 
   return {
     dryRun,
@@ -67,9 +71,11 @@ function readExecutionGates(env = process.env) {
     executionEnabled,
     priceExecutionEnabled,
     statusExecutionEnabled,
+    imageExecutionEnabled,
     globalWriteRequested,
     priceWriteRequested,
     statusWriteRequested,
+    imageWriteRequested,
     writeOperationsAvailable: anyDomainWriteRequested,
     // Alias de compatibilidad; las rutas mutables usan los gates por dominio.
     writeModeRequested: globalWriteRequested,

@@ -151,6 +151,7 @@ async function runControlled(plan, revalidation, options = {}) {
       TIENDANUBE_EXECUTION_ENABLED: "false",
       TIENDANUBE_PRICE_EXECUTION_ENABLED: "false",
       TIENDANUBE_STATUS_EXECUTION_ENABLED: "false",
+      TIENDANUBE_IMAGE_EXECUTION_ENABLED: "false",
     },
     now: new Date("2026-09-09T12:00:00.000Z"),
     persist: false,
@@ -158,6 +159,8 @@ async function runControlled(plan, revalidation, options = {}) {
     revalidateSyncPlan: async () => clone(revalidation),
     ...(options.priceAdapter ? { priceAdapter: options.priceAdapter } : {}),
     ...(options.statusAdapter ? { statusAdapter: options.statusAdapter } : {}),
+    ...(options.imageAdapter ? { imageAdapter: options.imageAdapter } : {}),
+    ...(options.imageTools ? { imageTools: options.imageTools } : {}),
   });
   assert.equal(clientAccessed, false);
   return result;

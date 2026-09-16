@@ -320,6 +320,7 @@ async function syncProduct(sourceSku, dependencies = {}) {
     supplierPrice: supplierProduct.precio,
     priceSourceLabel: supplierProduct.priceSourceLabel || null,
     imageUrl: supplierProduct.imageUrl || null,
+    imageSourceType: supplierProduct.imageSourceType || null,
   };
 
   const lookup = await classifyTiendanube(sourceSku, normalizedSku, client);

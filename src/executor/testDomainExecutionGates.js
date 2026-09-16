@@ -29,13 +29,15 @@ const GLOBAL_OPEN_ENV = {
   TIENDANUBE_EXECUTION_ENABLED: "true",
   TIENDANUBE_PRICE_EXECUTION_ENABLED: "false",
   TIENDANUBE_STATUS_EXECUTION_ENABLED: "false",
+  TIENDANUBE_IMAGE_EXECUTION_ENABLED: "false",
 };
 
-function domainEnv({ price = false, status = false } = {}) {
+function domainEnv({ price = false, status = false, image = false } = {}) {
   return {
     ...GLOBAL_OPEN_ENV,
     TIENDANUBE_PRICE_EXECUTION_ENABLED: String(price),
     TIENDANUBE_STATUS_EXECUTION_ENABLED: String(status),
+    TIENDANUBE_IMAGE_EXECUTION_ENABLED: String(image),
   };
 }
 
@@ -85,18 +87,22 @@ async function testDefaultsAndGlobalGates() {
       executionEnabled: defaults.executionEnabled,
       priceExecutionEnabled: defaults.priceExecutionEnabled,
       statusExecutionEnabled: defaults.statusExecutionEnabled,
+      imageExecutionEnabled: defaults.imageExecutionEnabled,
       globalWriteRequested: defaults.globalWriteRequested,
       priceWriteRequested: defaults.priceWriteRequested,
       statusWriteRequested: defaults.statusWriteRequested,
+      imageWriteRequested: defaults.imageWriteRequested,
     },
     {
       dryRun: true,
       executionEnabled: false,
       priceExecutionEnabled: false,
       statusExecutionEnabled: false,
+      imageExecutionEnabled: false,
       globalWriteRequested: false,
       priceWriteRequested: false,
       statusWriteRequested: false,
+      imageWriteRequested: false,
     },
   );
 
@@ -265,7 +271,7 @@ async function main() {
   await testBothDomains();
   await testLegacyDomainSupport();
   await testImageAndCreateRemainSimulation();
-  console.log("Resultado: OK. Gates PRICE y STATUS aislados con adapters mock.");
+  console.log("Resultado: OK. Gates PRICE, STATUS e IMAGE aislados con adapters mock.");
 }
 
 if (require.main === module) {

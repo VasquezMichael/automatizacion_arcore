@@ -50,6 +50,7 @@ async function planPublicationImage({ match, sourceBuffer, sourceHash, client })
     name: pickName(match.name),
     published: match.published,
     tiendanubeImageCount: 0,
+    tiendanubeImageIds: [],
     imageId: null,
     tiendanubeImageUrl: null,
     sourceHash,
@@ -63,6 +64,7 @@ async function planPublicationImage({ match, sourceBuffer, sourceHash, client })
   try {
     const images = await listProductImages(match.productId, client);
     publication.tiendanubeImageCount = images.length;
+    publication.tiendanubeImageIds = images.map((image) => image.id);
     if (images.length > 1) {
       publication.warnings.push({
         code: "MULTIPLE_TN_IMAGES",

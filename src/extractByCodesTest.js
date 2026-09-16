@@ -11,6 +11,9 @@ const {
   isAutomaticSupplierResolution,
   resolveArcoreCode,
 } = require("./extractor/arcoreCodeResolver");
+const {
+  selectArcoreImageSource,
+} = require("./extractor/arcoreImageSource");
 
 const INPUT_FILE = path.resolve(__dirname, "..", "input", "test-codes.json");
 const OUTPUT_DIR = path.resolve(__dirname, "..", "output");
@@ -168,10 +171,11 @@ async function searchCode(page, code) {
 
 async function fetchArticleMetadata(page, searchedCode) {
   const endpoint = `${baseUrl}/api/articulos`;
+  const apiQuery = normalizeCode(searchedCode);
   async function fetchPage(pageNumber) {
     const response = await page.request.get(endpoint, {
       params: {
-        query: searchedCode,
+        query: apiQuery,
         page: pageNumber,
       },
     });
@@ -222,16 +226,44 @@ async function fetchArticleMetadata(page, searchedCode) {
   const article = isAutomaticSupplierResolution(resolution)
     ? articles[resolution.matchedCandidateIndex] || null
     : null;
+  let articleDetail = null;
+  let detailDiagnostics = null;
+
+  if (article?.id) {
+    const detailUrl = `${endpoint}/${encodeURIComponent(article.id)}`;
+    try {
+      const detailResponse = await page.request.get(detailUrl);
+      detailDiagnostics = {
+        url: detailResponse.url(),
+        httpStatus: detailResponse.status(),
+        error: detailResponse.ok()
+          ? null
+          : `GET /api/articulos/{id} fallo con status HTTP ${detailResponse.status()}.`,
+      };
+      if (detailResponse.ok()) {
+        articleDetail = await detailResponse.json();
+      }
+    } catch (error) {
+      detailDiagnostics = {
+        url: detailUrl,
+        httpStatus: null,
+        error: `No se pudo consultar /api/articulos/{id}: ${error.message}`,
+      };
+    }
+  }
 
   return {
     article,
+    articleDetail,
     resolution,
     diagnostics: {
       url: firstPage.url,
       httpStatus: firstPage.status,
+      query: apiQuery,
       pages: totalPages,
       candidates: articles.length,
       candidateCodes: articles.map((candidate) => candidate.codComercial).filter(Boolean),
+      detail: detailDiagnostics,
       error: article ? null : `Resolucion Arcore: ${resolution.type}.`,
     },
   };
@@ -493,6 +525,7 @@ function buildRawProductFromCard(card, image, observation) {
     imageWidth: image?.width || null,
     imageHeight: image?.height || null,
     imageFuente: image?.source || null,
+    imageSourceType: image?.sourceType || null,
     observaciones: observation,
     rawText: card.rawText,
   };
@@ -580,9 +613,24 @@ async function extractCode(page, code) {
     }.`,
   );
 
-  let image = match.card.image;
+  const structuredImage =
+    selectArcoreImageSource(articleLookup.articleDetail) ||
+    selectArcoreImageSource(
+      articleLookup.article ? { cover: articleLookup.article.cover } : null,
+    );
+  let image = structuredImage
+    ? {
+        src: structuredImage.imageUrl,
+        width: 0,
+        height: 0,
+        source: structuredImage.imageSource,
+        sourceType: structuredImage.imageSourceType,
+      }
+    : match.card.image;
   let imageObservation = image
-    ? `Imagen encontrada en la card del producto (${matchType}).`
+    ? structuredImage
+      ? `Imagen seleccionada desde ${structuredImage.imageSourceType}.`
+      : `Imagen encontrada en la card del producto (${matchType}).`
     : "No se encontro imagen valida en card; se intentara detalle.";
 
   if (!image) {
@@ -646,6 +694,7 @@ async function extractCode(page, code) {
       estadoDisponibilidad: normalized.estadoDisponibilidad,
       imageUrl: normalized.imageUrl,
       imageSource: normalized.imageSource,
+      imageSourceType: normalized.imageSourceType,
       imageWidth: normalized.imageWidth,
       imageHeight: normalized.imageHeight,
       observacionesImagen: normalized.observacionesImagen,
