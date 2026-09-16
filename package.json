@@ -20,6 +20,7 @@
     "pricing:test-supplier-price": "node src/testSupplierPriceExtraction.js",
     "availability:test": "node src/classifier/testAvailability.js",
     "arcore:test-code-resolution": "node src/extractor/testArcoreCodeResolver.js",
+    "arcore:test-image-source": "node src/extractor/testArcoreImageSource.js",
     "images:test-fingerprint": "node src/tiendanube/testImageFingerprint.js",
     "sync:test": "node src/sync/syncProduct.js",
     "executor:test": "node src/executor/executeSyncPlan.js",

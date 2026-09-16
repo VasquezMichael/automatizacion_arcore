@@ -79,6 +79,7 @@ function normalizeProduct(rawProduct) {
     },
     imageUrl: rawProduct.imageUrl || null,
     imageSource: cleanString(rawProduct.imageFuente || rawProduct.imageSource),
+    imageSourceType: cleanString(rawProduct.imageSourceType) || null,
     imageWidth: toNumberOrNull(rawProduct.imageWidth),
     imageHeight: toNumberOrNull(rawProduct.imageHeight),
     observacionesImagen: cleanString(rawProduct.observaciones),
