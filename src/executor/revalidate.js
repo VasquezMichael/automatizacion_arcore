@@ -186,7 +186,8 @@ async function revalidateCreation(plan, client, dependencies) {
   if (matches.length === 0) {
     return {
       ok: true,
-      status: "STILL_ABSENT",
+      status: "PASSED",
+      absenceStatus: "STILL_ABSENT",
       issues: [],
       matches: [],
       plans: plan.plans,

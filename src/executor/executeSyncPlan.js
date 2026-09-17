@@ -31,6 +31,10 @@ const {
   isEligibleSingleImageReplace,
 } = require("./singleImageExecution");
 const {
+  executeSingleCreate,
+  isEligibleSingleCreate,
+} = require("./singleCreateExecution");
+const {
   executeLegacyPriceUpdates,
   validateLegacyPriceExecution,
 } = require("./legacyPriceExecution");
@@ -45,6 +49,7 @@ const {
 const { createTiendanubePriceAdapter } = require("./tiendanubePriceAdapter");
 const { createTiendanubeStatusAdapter } = require("./tiendanubeStatusAdapter");
 const { createTiendanubeImageAdapter } = require("./tiendanubeImageAdapter");
+const { createTiendanubeCreateAdapter } = require("./tiendanubeCreateAdapter");
 
 function serializeError(error) {
   return {
@@ -75,10 +80,12 @@ function baseExecution(sourceSku, gates, identity) {
     priceExecutionEnabled: gates.priceExecutionEnabled,
     statusExecutionEnabled: gates.statusExecutionEnabled,
     imageExecutionEnabled: gates.imageExecutionEnabled,
+    createExecutionEnabled: gates.createExecutionEnabled,
     globalWriteRequested: gates.globalWriteRequested,
     priceWriteRequested: gates.priceWriteRequested,
     statusWriteRequested: gates.statusWriteRequested,
     imageWriteRequested: gates.imageWriteRequested,
+    createWriteRequested: gates.createWriteRequested,
     writeModeRequested: gates.writeModeRequested,
     writeOperationsAvailable: false,
     writeOperationsAvailableByDomain: {
@@ -465,6 +472,47 @@ async function executeSupportedWrites(execution, gates, dependencies) {
   const actions = execution.executionPlan?.actions || [];
   annotateExecutionResults(actions);
 
+  if (execution.originalPlan?.classification === "CREATE_SINGLE") {
+    if (!gates.createWriteRequested || execution.revalidation?.ok !== true) return;
+
+    const createAction = actions.find((action) => action.type === "CREATE_PRODUCT");
+    const createExecutionAvailable = isEligibleSingleCreate(
+      execution.originalPlan,
+      execution.revalidation,
+      createAction,
+    );
+    execution.writeOperationsAvailableByDomain.create = createExecutionAvailable;
+    execution.writeOperationsAvailable = createExecutionAvailable;
+
+    if (createExecutionAvailable) {
+      const createAdapter =
+        dependencies.createAdapter || createTiendanubeCreateAdapter();
+      await executeSingleCreate({
+        plan: execution.originalPlan,
+        revalidation: execution.revalidation,
+        action: createAction,
+        adapter: createAdapter,
+      });
+      execution.errors.push(...(createAction.errors || []));
+      execution.warnings.push(...(createAction.warnings || []));
+    } else {
+      createAction.simulationResult = "BLOCKED";
+      createAction.executionResult = "BLOCKED";
+      createAction.errors = createAction.errors || [];
+      createAction.errors.push({
+        code: "CREATE_NOT_ELIGIBLE",
+        message: "CREATE_SINGLE no cumple todas las condiciones de identidad e integridad.",
+      });
+      execution.errors.push(...createAction.errors);
+    }
+
+    execution.result = summarizeActions(actions, !createExecutionAvailable, {
+      executionMode: true,
+    });
+    updateFinalVerify(actions, execution.result.executionStatus);
+    return;
+  }
+
   if (execution.originalPlan?.classification === "LEGACY_GROUP") {
     if (
       (!gates.priceWriteRequested &&
@@ -611,10 +659,12 @@ function printExecution(execution) {
   console.log(`- priceExecutionEnabled configurado: ${execution.priceExecutionEnabled}`);
   console.log(`- statusExecutionEnabled configurado: ${execution.statusExecutionEnabled}`);
   console.log(`- imageExecutionEnabled configurado: ${execution.imageExecutionEnabled}`);
+  console.log(`- createExecutionEnabled configurado: ${execution.createExecutionEnabled}`);
   console.log(`- globalWriteRequested: ${execution.globalWriteRequested}`);
   console.log(`- priceWriteRequested: ${execution.priceWriteRequested}`);
   console.log(`- statusWriteRequested: ${execution.statusWriteRequested}`);
   console.log(`- imageWriteRequested: ${execution.imageWriteRequested}`);
+  console.log(`- createWriteRequested: ${execution.createWriteRequested}`);
   console.log(`- effectiveDryRun: ${execution.effectiveDryRun}`);
   console.log(`- writeOperationsAvailable: ${execution.writeOperationsAvailable}`);
   console.log(
@@ -649,8 +699,8 @@ function printExecution(execution) {
   if (execution.result?.writeAttempted) {
     console.log(
       execution.result.writeSucceeded
-        ? "Se intento al menos una escritura y todos los PUT intentados respondieron exitosamente."
-        : "Se intento al menos una escritura y al menos un PUT fallo.",
+        ? "Se intento al menos una escritura y todas las operaciones mutables intentadas fueron exitosas."
+        : "Se intento al menos una escritura y al menos una operacion mutable fallo.",
     );
     console.log(
       execution.result.verified
