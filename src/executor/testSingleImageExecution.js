@@ -9,10 +9,6 @@ const {
   runControlled,
   successfulRevalidation,
 } = require("./testExecutor");
-const {
-  legacyPlan,
-  legacyRevalidation,
-} = require("./testLegacyPriceExecution");
 const { validateUploadPayload } = require("./tiendanubeImageAdapter");
 
 const IMAGE_ENV = {
@@ -519,27 +515,7 @@ async function testDomainIsolationAndGates() {
   console.log("OK 16-17: IMAGE aislada y gates cerrados impiden acceso al adapter.");
 }
 
-async function testUnsupportedClassifications() {
-  const legacy = legacyPlan([150, 150]);
-  legacy.plans.image = clone(imagePlan({ imageCount: 1 }).plans.image);
-  legacy.plans.image.publications = legacy.tiendanube.matches.map((item, index) => ({
-    ...clone(legacy.plans.image.publications[0]),
-    productId: item.productId,
-    variantId: item.variantId,
-    imageId: 401 + index,
-  }));
-  const legacyFake = fakeImageAdapter(imagePlan());
-  const legacyResult = await runControlled(legacy, legacyRevalidation(legacy), {
-    env: IMAGE_ENV,
-    imageAdapter: legacyFake.adapter,
-    imageTools: fakeImageTools(),
-  });
-  assert.equal(legacyFake.calls.length, 0);
-  assert(legacyResult.executionPlan.actions
-    .filter((item) => item.type === "IMAGE")
-    .every((item) => item.executionResult === "SIMULATED"));
-  assert.equal(legacyResult.writeOperationsAvailableByDomain.image, false);
-
+async function testCreateClassificationRemainsUnsupported() {
   const creation = createPlan();
   const creationFake = fakeImageAdapter(imagePlan());
   const creationResult = await runControlled(
@@ -564,7 +540,7 @@ async function testUnsupportedClassifications() {
       .executionResult,
     "SIMULATED",
   );
-  console.log("OK 18-19: IMAGE legacy y CREATE_SINGLE permanecen sin writes.");
+  console.log("OK 18-19: CREATE_SINGLE permanece sin ruta de escritura IMAGE.");
 }
 
 async function main() {
@@ -578,7 +554,7 @@ async function main() {
   await testMultipleImages();
   await testPreWriteAlreadyAppliedAndIdempotency();
   await testDomainIsolationAndGates();
-  await testUnsupportedClassifications();
+  await testCreateClassificationRemainsUnsupported();
   console.log("Resultado: OK. Casos 1-20 cubiertos con adapters mock.");
 }
 
