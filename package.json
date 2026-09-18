@@ -33,6 +33,8 @@
     "executor:test-image-legacy": "node src/executor/testLegacyImageExecution.js",
     "executor:test-create-single": "node src/executor/testSingleCreateExecution.js",
     "executor:test-domain-gates": "node src/executor/testDomainExecutionGates.js",
+    "batch:test": "node src/batch/testBatchSync.js",
+    "sync:batch": "node src/batch/batchCli.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"
