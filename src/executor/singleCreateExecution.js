@@ -6,6 +6,7 @@ const ALLOWED_IMAGE_SOURCE_TYPES = new Set([
   "COVER_FULL",
   "COVER_THUMBNAIL_FALLBACK",
 ]);
+const DEFAULT_INDEX_DELAYS_MS = Object.freeze([0, 1000, 2000, 3000, 5000]);
 
 function safeError(error, fallbackCode) {
   return {
@@ -24,6 +25,10 @@ function initializeTrace(action, normalizedSku) {
   action.createdProductId = null;
   action.createdVariantId = null;
   action.postCreateMatchCount = null;
+  action.indexLookupAttempts = 0;
+  action.indexWaitMs = 0;
+  action.indexEventuallyConsistent = false;
+  action.verifiedByDirectGet = false;
   action.payloadFields = [];
   action.imageIncluded = false;
   action.writeAttempted = false;
@@ -171,59 +176,85 @@ function responseVariant(product, normalizedSku) {
   return matches.length === 1 ? matches[0] : null;
 }
 
-async function verifyCreatedProduct({
+function validResourceId(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0;
+}
+
+async function sleep(ms) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForCreatedSkuIndex({
   adapter,
-  action,
-  payload,
-  responseProduct,
+  normalizedSku,
+  delaysMs = DEFAULT_INDEX_DELAYS_MS,
+  sleepFn = sleep,
 }) {
-  const normalizedSku = action.normalizedSku;
-  const lookup = await adapter.findSkuMatches(normalizedSku);
-  const matches = lookup?.matches || [];
-  action.postCreateMatchCount = matches.length;
+  let indexWaitMs = 0;
+  let indexLookupAttempts = 0;
+  let sawEmptyIndex = false;
 
-  if (matches.length > 1) {
-    const error = new Error("Aparecieron multiples publicaciones despues de CREATE.");
-    error.code = "CREATE_MULTIPLE_MATCHES_AFTER_WRITE";
-    error.details = { matchCount: matches.length };
-    throw error;
-  }
-  if (matches.length !== 1) {
-    const error = new Error("La publicacion creada no aparece en la busqueda por SKU.");
-    error.code = "CREATE_WRITE_VERIFICATION_FAILED";
-    error.details = { matchCount: matches.length };
-    throw error;
-  }
-
-  const match = matches[0];
-  const responseProductId = responseProduct?.id ?? null;
-  const responseVariantId = responseVariant(responseProduct, normalizedSku)?.id ?? null;
-  if (
-    (responseProductId && String(responseProductId) !== String(match.productId)) ||
-    (responseVariantId && String(responseVariantId) !== String(match.variantId))
-  ) {
-    const error = new Error("La identidad devuelta por CREATE no coincide con la busqueda por SKU.");
-    error.code = "CREATE_IDENTITY_MISMATCH";
-    error.details = {
-      responseProductId,
-      matchedProductId: match.productId,
-      responseVariantId,
-      matchedVariantId: match.variantId,
+  for (const delayMs of delaysMs) {
+    if (delayMs > 0) {
+      await sleepFn(delayMs);
+      indexWaitMs += delayMs;
+    }
+    let lookup;
+    try {
+      lookup = await adapter.findSkuMatches(normalizedSku);
+    } catch (error) {
+      error.indexLookupAttempts = indexLookupAttempts + 1;
+      error.indexWaitMs = indexWaitMs;
+      throw error;
+    }
+    const matches = lookup?.matches || [];
+    indexLookupAttempts += 1;
+    if (matches.length === 0) {
+      sawEmptyIndex = true;
+      continue;
+    }
+    return {
+      matches,
+      indexLookupAttempts,
+      indexWaitMs,
+      indexEventuallyConsistent: sawEmptyIndex && matches.length === 1,
     };
+  }
+
+  return {
+    matches: [],
+    indexLookupAttempts,
+    indexWaitMs,
+    indexEventuallyConsistent: false,
+  };
+}
+
+async function verifyProductById({
+  adapter,
+  productId,
+  expectedVariantId,
+  normalizedSku,
+  payload,
+}) {
+  if (!validResourceId(productId)) {
+    const error = new Error("CREATE no devolvio un productId valido.");
+    error.code = "CREATE_IDENTITY_MISMATCH";
     throw error;
   }
 
-  const product = await adapter.getProduct(match.productId);
+  const product = await adapter.getProduct(productId);
   const variants = Array.isArray(product?.variants) ? product.variants : [];
   const relevantVariants = variants.filter(
     (variant) => normalizeSku(variant.sku) === normalizedSku,
   );
   const variant = relevantVariants[0];
   const identityOk =
-    String(product?.id || "") === String(match.productId) &&
+    String(product?.id || "") === String(productId) &&
     variants.length === 1 &&
     relevantVariants.length === 1 &&
-    String(variant?.id || "") === String(match.variantId) &&
+    validResourceId(variant?.id) &&
+    (!expectedVariantId || String(variant.id) === String(expectedVariantId)) &&
     normalizeSku(variant?.sku) === normalizedSku;
 
   if (!identityOk) {
@@ -255,7 +286,7 @@ async function verifyCreatedProduct({
       !Array.isArray(images) ||
       images.length !== 1 ||
       primary.length !== 1 ||
-      !primary[0]?.id
+      !validResourceId(primary[0]?.id)
     ) {
       const error = new Error("El GET posterior no confirmo la imagen primaria enviada.");
       error.code = "CREATE_WRITE_VERIFICATION_FAILED";
@@ -263,13 +294,143 @@ async function verifyCreatedProduct({
     }
   }
 
-  action.createdProductId = product.id;
-  action.createdVariantId = variant.id;
-  action.productId = product.id;
-  action.variantId = variant.id;
+  return { product, variant };
 }
 
-async function executeSingleCreate({ plan, revalidation, action, adapter }) {
+async function verifyCreatedProduct({
+  adapter,
+  action,
+  payload,
+  responseProduct,
+  ambiguousWrite,
+  polling = {},
+}) {
+  const normalizedSku = action.normalizedSku;
+  const responseProductId = responseProduct?.id ?? null;
+  const responseVariantId = responseVariant(responseProduct, normalizedSku)?.id ?? null;
+  let directVerification = null;
+  let directReadError = null;
+
+  if (responseProductId !== null) {
+    action.createdProductId = responseProductId;
+    action.createdVariantId = responseVariantId;
+    try {
+      directVerification = await verifyProductById({
+        adapter,
+        productId: responseProductId,
+        expectedVariantId: responseVariantId,
+        normalizedSku,
+        payload,
+      });
+      action.createdProductId = directVerification.product.id;
+      action.createdVariantId = directVerification.variant.id;
+      action.productId = directVerification.product.id;
+      action.variantId = directVerification.variant.id;
+      action.verifiedByDirectGet = true;
+    } catch (error) {
+      if (
+        error.code === "CREATE_IDENTITY_MISMATCH" ||
+        error.code === "CREATE_WRITE_VERIFICATION_FAILED"
+      ) {
+        throw error;
+      }
+      directReadError = error;
+    }
+  }
+
+  let indexResult;
+  try {
+    indexResult = await waitForCreatedSkuIndex({
+      adapter,
+      normalizedSku,
+      delaysMs: polling.delaysMs || DEFAULT_INDEX_DELAYS_MS,
+      sleepFn: polling.sleepFn || sleep,
+    });
+  } catch (error) {
+    action.indexLookupAttempts = error.indexLookupAttempts || 0;
+    action.indexWaitMs = error.indexWaitMs || 0;
+    if (directVerification) {
+      action.warnings.push({
+        code: "CREATE_SKU_INDEX_PENDING",
+        message: "El producto fue verificado por GET directo, pero el indice SKU no pudo confirmarse.",
+        details: safeError(error, "CREATE_INDEX_LOOKUP_FAILED"),
+      });
+      return;
+    }
+    throw error;
+  }
+
+  const matches = indexResult.matches;
+  action.postCreateMatchCount = matches.length;
+  action.indexLookupAttempts = indexResult.indexLookupAttempts;
+  action.indexWaitMs = indexResult.indexWaitMs;
+  action.indexEventuallyConsistent = indexResult.indexEventuallyConsistent;
+
+  if (matches.length > 1) {
+    const error = new Error("Aparecieron multiples publicaciones despues de CREATE.");
+    error.code = "CREATE_MULTIPLE_MATCHES_AFTER_WRITE";
+    error.details = { matchCount: matches.length };
+    throw error;
+  }
+
+  if (matches.length === 0) {
+    if (directVerification) {
+      action.warnings.push({
+        code: "CREATE_SKU_INDEX_PENDING",
+        message: "El producto fue verificado por GET directo, pero el indice SKU sigue pendiente.",
+        details: {
+          attempts: action.indexLookupAttempts,
+          waitedMs: action.indexWaitMs,
+        },
+      });
+      return;
+    }
+    const error = new Error("La publicacion creada no aparece en la busqueda por SKU.");
+    error.code = ambiguousWrite
+      ? "CREATE_WRITE_AMBIGUOUS"
+      : "CREATE_WRITE_VERIFICATION_FAILED";
+    error.details = {
+      matchCount: 0,
+      ...(directReadError
+        ? { directReadError: safeError(directReadError, "CREATE_DIRECT_GET_FAILED") }
+        : {}),
+    };
+    throw error;
+  }
+
+  const match = matches[0];
+  if (
+    (responseProductId && String(responseProductId) !== String(match.productId)) ||
+    (responseVariantId && String(responseVariantId) !== String(match.variantId)) ||
+    (directVerification &&
+      (String(directVerification.product.id) !== String(match.productId) ||
+        String(directVerification.variant.id) !== String(match.variantId)))
+  ) {
+    const error = new Error("La identidad devuelta por CREATE no coincide con la busqueda por SKU.");
+    error.code = "CREATE_IDENTITY_MISMATCH";
+    error.details = {
+      responseProductId,
+      matchedProductId: match.productId,
+      responseVariantId,
+      matchedVariantId: match.variantId,
+    };
+    throw error;
+  }
+
+  const verified = directVerification || await verifyProductById({
+    adapter,
+    productId: match.productId,
+    expectedVariantId: match.variantId,
+    normalizedSku,
+    payload,
+  });
+  action.createdProductId = verified.product.id;
+  action.createdVariantId = verified.variant.id;
+  action.productId = verified.product.id;
+  action.variantId = verified.variant.id;
+}
+
+async function executeSingleCreate({ plan, revalidation, action, adapter, polling }) {
   initializeTrace(action, plan.normalizedSku);
 
   if (!isEligibleSingleCreate(plan, revalidation, action)) {
@@ -325,6 +486,11 @@ async function executeSingleCreate({ plan, revalidation, action, adapter }) {
   try {
     responseProduct = await adapter.createProduct(payload);
     action.createSucceeded = true;
+    action.createdProductId = responseProduct?.id ?? null;
+    action.createdVariantId = responseVariant(
+      responseProduct,
+      action.normalizedSku,
+    )?.id ?? null;
   } catch (error) {
     if (!error.ambiguous && error.code !== "CREATE_WRITE_AMBIGUOUS") {
       return failAction(action, "WRITE_FAILED", safeError(error, "CREATE_WRITE_FAILED"));
@@ -336,7 +502,14 @@ async function executeSingleCreate({ plan, revalidation, action, adapter }) {
   }
 
   try {
-    await verifyCreatedProduct({ adapter, action, payload, responseProduct });
+    await verifyCreatedProduct({
+      adapter,
+      action,
+      payload,
+      responseProduct,
+      ambiguousWrite,
+      polling,
+    });
     action.writeSucceeded = true;
     action.verified = true;
     action.updated = true;
@@ -354,6 +527,7 @@ async function executeSingleCreate({ plan, revalidation, action, adapter }) {
     const preservedCodes = new Set([
       "CREATE_IDENTITY_MISMATCH",
       "CREATE_MULTIPLE_MATCHES_AFTER_WRITE",
+      "CREATE_WRITE_AMBIGUOUS",
       "CREATE_WRITE_VERIFICATION_FAILED",
     ]);
     const code = preservedCodes.has(rawCode)
@@ -366,9 +540,6 @@ async function executeSingleCreate({ plan, revalidation, action, adapter }) {
     if (code === "CREATE_MULTIPLE_MATCHES_AFTER_WRITE") {
       return failAction(action, "WRITE_VERIFICATION_FAILED", serialized);
     }
-    if (ambiguousWrite && action.postCreateMatchCount === 0) {
-      serialized.code = "CREATE_WRITE_AMBIGUOUS";
-    }
     return failAction(action, "WRITE_VERIFICATION_FAILED", serialized);
   }
 }
@@ -378,4 +549,5 @@ module.exports = {
   executeSingleCreate,
   isEligibleSingleCreate,
   localizedText,
+  waitForCreatedSkuIndex,
 };

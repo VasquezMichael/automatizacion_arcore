@@ -162,6 +162,7 @@ async function runControlled(plan, revalidation, options = {}) {
     ...(options.statusAdapter ? { statusAdapter: options.statusAdapter } : {}),
     ...(options.imageAdapter ? { imageAdapter: options.imageAdapter } : {}),
     ...(options.createAdapter ? { createAdapter: options.createAdapter } : {}),
+    ...(options.createPolling ? { createPolling: options.createPolling } : {}),
     ...(options.imageTools ? { imageTools: options.imageTools } : {}),
   });
   assert.equal(clientAccessed, false);

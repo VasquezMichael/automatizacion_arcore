@@ -16,6 +16,10 @@ const OPEN_CREATE_ENV = {
   TIENDANUBE_IMAGE_EXECUTION_ENABLED: "false",
   TIENDANUBE_CREATE_EXECUTION_ENABLED: "true",
 };
+const FAST_POLLING = {
+  delaysMs: [0],
+  sleepFn: async () => {},
+};
 
 function createRevalidation(plan, overrides = {}) {
   return {
@@ -133,6 +137,9 @@ function fakeCreateAdapter(options = {}) {
 
     async getProduct(productId) {
       calls.push({ method: "GET_PRODUCT", productId });
+      if (options.getProductError) {
+        throw Object.assign(new Error("GET failed"), { code: "GET_FAILED" });
+      }
       if (!createdProduct) throw new Error("product missing");
       return clone(createdProduct);
     },
@@ -158,6 +165,7 @@ async function runCreate(plan, fake, options = {}) {
     {
       env: options.env || OPEN_CREATE_ENV,
       createAdapter: fake.adapter,
+      createPolling: options.createPolling || FAST_POLLING,
       ...(options.adapters || {}),
     },
   );
@@ -291,6 +299,125 @@ async function testPostFailuresAndAmbiguity() {
     ),
   );
   console.log("OK 11-14: no hay retry ciego y el POST ambiguo se resuelve solo mediante lecturas.");
+}
+
+function indexedMatch(overrides = {}) {
+  return {
+    productId: 501,
+    variantId: 601,
+    sku: "415000010",
+    normalizedSku: "415000010",
+    price: "150",
+    published: true,
+    name: "Nombre minimo Arcore",
+    ...overrides,
+  };
+}
+
+async function testEventualConsistencyRecovery() {
+  const waited = [];
+  const late = fakeCreateAdapter({
+    searchSequence: [[], [], [], [indexedMatch()]],
+  });
+  const lateResult = await runCreate(createPlan(), late, {
+    createPolling: {
+      delaysMs: [0, 1000, 2000],
+      sleepFn: async (ms) => waited.push(ms),
+    },
+  });
+  const lateAction = createAction(lateResult);
+  assert.equal(lateAction.executionResult, "WRITE_SUCCEEDED");
+  assert.equal(lateAction.verified, true);
+  assert.equal(lateAction.updated, true);
+  assert.equal(lateAction.verifiedByDirectGet, true);
+  assert.equal(lateAction.indexLookupAttempts, 3);
+  assert.equal(lateAction.indexWaitMs, 3000);
+  assert.equal(lateAction.indexEventuallyConsistent, true);
+  assert.deepEqual(waited, [1000, 2000]);
+  assert.equal(postCalls(late).length, 1);
+
+  const pending = fakeCreateAdapter({
+    searchSequence: [[], [], [], []],
+  });
+  const pendingResult = await runCreate(createPlan(), pending, {
+    createPolling: {
+      delaysMs: [0, 1, 2],
+      sleepFn: async () => {},
+    },
+  });
+  const pendingAction = createAction(pendingResult);
+  assert.equal(pendingAction.executionResult, "WRITE_SUCCEEDED");
+  assert.equal(pendingAction.verified, true);
+  assert.equal(pendingAction.writeSucceeded, true);
+  assert.equal(pendingAction.updated, true);
+  assert.equal(pendingAction.verifiedByDirectGet, true);
+  assert.equal(pendingAction.postCreateMatchCount, 0);
+  assert.equal(pendingAction.indexLookupAttempts, 3);
+  assert.equal(pendingAction.indexWaitMs, 3);
+  assert(
+    pendingAction.warnings.some((warning) => warning.code === "CREATE_SKU_INDEX_PENDING"),
+  );
+  assert.equal(postCalls(pending).length, 1);
+
+  const multiple = fakeCreateAdapter({
+    searchSequence: [[], [], [indexedMatch(), indexedMatch({ productId: 502, variantId: 602 })]],
+  });
+  const multipleResult = await runCreate(createPlan(), multiple, {
+    createPolling: { delaysMs: [0, 1], sleepFn: async () => {} },
+  });
+  assert(
+    createAction(multipleResult).errors.some(
+      (error) => error.code === "CREATE_MULTIPLE_MATCHES_AFTER_WRITE",
+    ),
+  );
+  assert.equal(postCalls(multiple).length, 1);
+
+  const wrongSku = fakeCreateAdapter({
+    mutateProduct: (product) => ({
+      ...product,
+      variants: [{ ...product.variants[0], sku: "SKU-INCORRECTO" }],
+    }),
+  });
+  const wrongSkuResult = await runCreate(createPlan(), wrongSku);
+  assert(
+    createAction(wrongSkuResult).errors.some(
+      (error) => error.code === "CREATE_IDENTITY_MISMATCH",
+    ),
+  );
+
+  const unverifiable = fakeCreateAdapter({
+    getProductError: true,
+    postCreateMatchCount: 0,
+  });
+  const unverifiableResult = await runCreate(createPlan(), unverifiable, {
+    createPolling: { delaysMs: [0, 1], sleepFn: async () => {} },
+  });
+  assert.equal(
+    createAction(unverifiableResult).executionResult,
+    "WRITE_VERIFICATION_FAILED",
+  );
+
+  const ambiguousLate = fakeCreateAdapter({
+    ambiguous: true,
+    searchSequence: [[], [], [indexedMatch()]],
+  });
+  const ambiguousLateResult = await runCreate(createPlan(), ambiguousLate, {
+    createPolling: { delaysMs: [0, 1], sleepFn: async () => {} },
+  });
+  const ambiguousLateAction = createAction(ambiguousLateResult);
+  assert.equal(ambiguousLateAction.executionResult, "WRITE_SUCCEEDED");
+  assert.equal(ambiguousLateAction.indexEventuallyConsistent, true);
+  assert.equal(postCalls(ambiguousLate).length, 1);
+
+  for (const fake of [late, pending, multiple, wrongSku, unverifiable, ambiguousLate]) {
+    assert(postCalls(fake).length <= 1);
+    assert.equal(
+      fake.calls.some((call) =>
+        ["PUT_PRICE", "PUT_STATUS", "POST_IMAGE", "DELETE_IMAGE"].includes(call.method)),
+      false,
+    );
+  }
+  console.log("OK consistencia eventual: GET directo, polling acotado y cero retries de POST.");
 }
 
 async function testVerificationFailures() {
@@ -444,6 +571,7 @@ async function main() {
   await testPreWriteDuplicateGuards();
   await testPlanAndInputBlocks();
   await testPostFailuresAndAmbiguity();
+  await testEventualConsistencyRecovery();
   await testVerificationFailures();
   await testImagePolicy();
   await testIdempotency();

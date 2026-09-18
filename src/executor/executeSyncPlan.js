@@ -492,6 +492,7 @@ async function executeSupportedWrites(execution, gates, dependencies) {
         revalidation: execution.revalidation,
         action: createAction,
         adapter: createAdapter,
+        polling: dependencies.createPolling,
       });
       execution.errors.push(...(createAction.errors || []));
       execution.warnings.push(...(createAction.warnings || []));
