@@ -5,6 +5,7 @@ const EXECUTION_ORDER = Object.freeze([
   "STATUS",
   "PRICE",
   "IMAGE",
+  "CREATE",
   "FINAL_VERIFY",
 ]);
 
@@ -290,8 +291,14 @@ function buildPublicationActions(plan, currentPlans, domainBlocks) {
 }
 
 function buildCreationAction(plan, domainBlocks) {
-  const hasImage = Boolean(plan.supplier.imageUrl) && domainBlocks.image.length === 0;
-  const hasMinimumName = Boolean(plan.supplier.name);
+  const sourceImageUrl = plan.plans?.image?.sourceImageUrl || plan.supplier.imageUrl;
+  const hasImage =
+    plan.plans?.image?.action === "IMAGE_FOR_CREATION" &&
+    Boolean(sourceImageUrl) &&
+    Boolean(plan.plans?.image?.sourceHash) &&
+    domainBlocks.image.length === 0;
+  const minimumName = String(plan.supplier.name || "").trim();
+  const hasMinimumName = Boolean(minimumName);
   return {
     type: "CREATE_PRODUCT",
     productId: null,
@@ -300,11 +307,11 @@ function buildCreationAction(plan, domainBlocks) {
     currentState: { matchCount: 0 },
     desiredState: {
       sku: plan.normalizedSku,
-      name: plan.supplier.name || null,
+      name: minimumName || null,
       nameSource: hasMinimumName ? "ARCORE_MINIMAL" : null,
       price: plan.plans.price.calculation.calculatedPrice,
       published: plan.plans.status.desiredPublished,
-      primaryImage: hasImage ? plan.supplier.imageUrl : null,
+      primaryImage: hasImage ? sourceImageUrl : null,
       allowedFields: [
         "sku",
         "price",

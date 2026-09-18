@@ -152,6 +152,7 @@ async function runControlled(plan, revalidation, options = {}) {
       TIENDANUBE_PRICE_EXECUTION_ENABLED: "false",
       TIENDANUBE_STATUS_EXECUTION_ENABLED: "false",
       TIENDANUBE_IMAGE_EXECUTION_ENABLED: "false",
+      TIENDANUBE_CREATE_EXECUTION_ENABLED: "false",
     },
     now: new Date("2026-09-09T12:00:00.000Z"),
     persist: false,
@@ -160,6 +161,8 @@ async function runControlled(plan, revalidation, options = {}) {
     ...(options.priceAdapter ? { priceAdapter: options.priceAdapter } : {}),
     ...(options.statusAdapter ? { statusAdapter: options.statusAdapter } : {}),
     ...(options.imageAdapter ? { imageAdapter: options.imageAdapter } : {}),
+    ...(options.createAdapter ? { createAdapter: options.createAdapter } : {}),
+    ...(options.createPolling ? { createPolling: options.createPolling } : {}),
     ...(options.imageTools ? { imageTools: options.imageTools } : {}),
   });
   assert.equal(clientAccessed, false);
@@ -333,6 +336,7 @@ function createPlan({ image = true, supplierPrice = 100, availability = "AVAILAB
       availability,
       supplierPrice,
       imageUrl: image ? "https://www.arcore.com/image.png" : null,
+      imageSourceType: image ? "COVER_FULL" : null,
     },
     tiendanube: {
       matchCount: 0,

@@ -30,14 +30,16 @@ const GLOBAL_OPEN_ENV = {
   TIENDANUBE_PRICE_EXECUTION_ENABLED: "false",
   TIENDANUBE_STATUS_EXECUTION_ENABLED: "false",
   TIENDANUBE_IMAGE_EXECUTION_ENABLED: "false",
+  TIENDANUBE_CREATE_EXECUTION_ENABLED: "false",
 };
 
-function domainEnv({ price = false, status = false, image = false } = {}) {
+function domainEnv({ price = false, status = false, image = false, create = false } = {}) {
   return {
     ...GLOBAL_OPEN_ENV,
     TIENDANUBE_PRICE_EXECUTION_ENABLED: String(price),
     TIENDANUBE_STATUS_EXECUTION_ENABLED: String(status),
     TIENDANUBE_IMAGE_EXECUTION_ENABLED: String(image),
+    TIENDANUBE_CREATE_EXECUTION_ENABLED: String(create),
   };
 }
 
@@ -88,10 +90,12 @@ async function testDefaultsAndGlobalGates() {
       priceExecutionEnabled: defaults.priceExecutionEnabled,
       statusExecutionEnabled: defaults.statusExecutionEnabled,
       imageExecutionEnabled: defaults.imageExecutionEnabled,
+      createExecutionEnabled: defaults.createExecutionEnabled,
       globalWriteRequested: defaults.globalWriteRequested,
       priceWriteRequested: defaults.priceWriteRequested,
       statusWriteRequested: defaults.statusWriteRequested,
       imageWriteRequested: defaults.imageWriteRequested,
+      createWriteRequested: defaults.createWriteRequested,
     },
     {
       dryRun: true,
@@ -99,10 +103,12 @@ async function testDefaultsAndGlobalGates() {
       priceExecutionEnabled: false,
       statusExecutionEnabled: false,
       imageExecutionEnabled: false,
+      createExecutionEnabled: false,
       globalWriteRequested: false,
       priceWriteRequested: false,
       statusWriteRequested: false,
       imageWriteRequested: false,
+      createWriteRequested: false,
     },
   );
 

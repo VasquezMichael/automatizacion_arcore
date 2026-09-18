@@ -58,12 +58,15 @@ function readExecutionGates(env = process.env) {
     String(env.TIENDANUBE_STATUS_EXECUTION_ENABLED || "false").trim().toLowerCase() === "true";
   const imageExecutionEnabled =
     String(env.TIENDANUBE_IMAGE_EXECUTION_ENABLED || "false").trim().toLowerCase() === "true";
+  const createExecutionEnabled =
+    String(env.TIENDANUBE_CREATE_EXECUTION_ENABLED || "false").trim().toLowerCase() === "true";
   const globalWriteRequested = !dryRun && executionEnabled;
   const priceWriteRequested = globalWriteRequested && priceExecutionEnabled;
   const statusWriteRequested = globalWriteRequested && statusExecutionEnabled;
   const imageWriteRequested = globalWriteRequested && imageExecutionEnabled;
+  const createWriteRequested = globalWriteRequested && createExecutionEnabled;
   const anyDomainWriteRequested =
-    priceWriteRequested || statusWriteRequested || imageWriteRequested;
+    priceWriteRequested || statusWriteRequested || imageWriteRequested || createWriteRequested;
 
   return {
     dryRun,
@@ -72,10 +75,12 @@ function readExecutionGates(env = process.env) {
     priceExecutionEnabled,
     statusExecutionEnabled,
     imageExecutionEnabled,
+    createExecutionEnabled,
     globalWriteRequested,
     priceWriteRequested,
     statusWriteRequested,
     imageWriteRequested,
+    createWriteRequested,
     writeOperationsAvailable: anyDomainWriteRequested,
     // Alias de compatibilidad; las rutas mutables usan los gates por dominio.
     writeModeRequested: globalWriteRequested,
@@ -275,6 +280,7 @@ function validateExecutionPlan(plan) {
 
   if (plan.classification === "CREATE_SINGLE") {
     const calculatedPrice = Number(plan.plans?.price?.calculation?.calculatedPrice);
+    const minimumName = String(plan.supplier?.name || "").trim();
     if (supplierPrice === null || supplierPrice <= 0) {
       issues.push(
         issue(
@@ -283,11 +289,23 @@ function validateExecutionPlan(plan) {
         ),
       );
     }
-    if (!Number.isFinite(calculatedPrice) || calculatedPrice <= 0) {
+    if (
+      !Number.isFinite(calculatedPrice) ||
+      calculatedPrice <= 0 ||
+      !Number.isInteger(calculatedPrice)
+    ) {
       issues.push(
         issue(
           "INVALID_CALCULATED_PRICE",
           "CREATE_SINGLE requiere precio calculado valido y mayor que cero.",
+        ),
+      );
+    }
+    if (!minimumName) {
+      issues.push(
+        issue(
+          "INVALID_CREATION_NAME",
+          "CREATE_SINGLE requiere un nombre minimo valido proveniente de Arcore.",
         ),
       );
     }

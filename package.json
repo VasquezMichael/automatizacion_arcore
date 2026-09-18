@@ -31,6 +31,7 @@
     "executor:test-status-legacy": "node src/executor/testLegacyStatusExecution.js",
     "executor:test-image-single": "node src/executor/testSingleImageExecution.js",
     "executor:test-image-legacy": "node src/executor/testLegacyImageExecution.js",
+    "executor:test-create-single": "node src/executor/testSingleCreateExecution.js",
     "executor:test-domain-gates": "node src/executor/testDomainExecutionGates.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
