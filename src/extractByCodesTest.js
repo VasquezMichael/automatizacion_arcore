@@ -531,6 +531,78 @@ function buildRawProductFromCard(card, image, observation) {
   };
 }
 
+function buildStructuredArticleCard(article, articleDetail) {
+  const detail = articleDetail && typeof articleDetail === "object" ? articleDetail : {};
+  const listing = article && typeof article === "object" ? article : {};
+  return {
+    cardIndex: null,
+    codigo: listing.codigo || detail.codigo || "",
+    marcaId: listing.marcaId || detail.marcaId || "",
+    marca: listing.marca || detail.marca || "",
+    nombre:
+      listing.nombre ||
+      listing.descripcion ||
+      detail.nombre ||
+      detail.descripcion ||
+      listing.codComercial ||
+      "",
+    precio: null,
+    priceSourceLabel: null,
+    disponibilidadTexto: "",
+    rawText: "",
+    image: null,
+  };
+}
+
+function selectResolvedProductSource({ articleLookup, match }) {
+  const resolution = articleLookup?.resolution || match?.resolution || null;
+  if (match?.found && match.card) {
+    return {
+      found: true,
+      card: match.card,
+      source: "DOM_CARD",
+      domCardStatus: "DOM_CARD_AVAILABLE",
+      warnings: [],
+    };
+  }
+
+  if (isAutomaticSupplierResolution(resolution) && articleLookup?.article) {
+    const warnings = [
+      {
+        code: "ARCORE_DOM_CARD_UNAVAILABLE",
+        message:
+          "El articulo existe en la fuente estructurada, pero no tiene una tarjeta DOM extraible.",
+      },
+    ];
+    if (articleLookup.diagnostics?.detail?.error) {
+      warnings.push({
+        code: "ARCORE_ARTICLE_DETAIL_UNAVAILABLE",
+        message:
+          "El detalle estructurado no estuvo disponible; se conservaron los datos seguros del listado.",
+        httpStatus: articleLookup.diagnostics.detail.httpStatus ?? null,
+      });
+    }
+    return {
+      found: true,
+      card: buildStructuredArticleCard(
+        articleLookup.article,
+        articleLookup.articleDetail,
+      ),
+      source: "STRUCTURED_ARTICLE",
+      domCardStatus: "DOM_CARD_NOT_AVAILABLE",
+      warnings,
+    };
+  }
+
+  return {
+    found: false,
+    card: null,
+    source: null,
+    domCardStatus: "DOM_CARD_NOT_AVAILABLE",
+    warnings: [],
+  };
+}
+
 async function extractCode(page, code) {
   console.log(`\n[${code}] Abriendo listado de articulos...`);
   await page.goto(`${baseUrl}/articulos`, { waitUntil: "networkidle" });
@@ -572,7 +644,8 @@ async function extractCode(page, code) {
     supplierResolution = match.resolution;
   }
 
-  if (!match.found || !isAutomaticSupplierResolution(supplierResolution)) {
+  const resolvedSource = selectResolvedProductSource({ articleLookup, match });
+  if (!resolvedSource.found || !isAutomaticSupplierResolution(supplierResolution)) {
     const resolution = supplierResolution || {
       type: SupplierResolutionType.NOT_FOUND,
       sourceCode: normalizeCode(code),
@@ -592,9 +665,10 @@ async function extractCode(page, code) {
 
   const matchType = supplierResolution.type;
   const matchedCode = supplierResolution.matchedCode;
-  const supplierPrice = extractSupplierPriceFromText(match.card.rawText);
-  match.card.precio = supplierPrice.precio;
-  match.card.priceSourceLabel = supplierPrice.priceSourceLabel;
+  const selectedCard = resolvedSource.card;
+  const supplierPrice = extractSupplierPriceFromText(selectedCard.rawText);
+  selectedCard.precio = supplierPrice.precio;
+  selectedCard.priceSourceLabel = supplierPrice.priceSourceLabel;
   const matchObservation =
     supplierResolution.type === SupplierResolutionType.EXACT
       ? "Coincidencia exacta encontrada."
@@ -626,14 +700,16 @@ async function extractCode(page, code) {
         source: structuredImage.imageSource,
         sourceType: structuredImage.imageSourceType,
       }
-    : match.card.image;
+    : selectedCard.image;
   let imageObservation = image
     ? structuredImage
       ? `Imagen seleccionada desde ${structuredImage.imageSourceType}.`
       : `Imagen encontrada en la card del producto (${matchType}).`
-    : "No se encontro imagen valida en card; se intentara detalle.";
+    : resolvedSource.source === "STRUCTURED_ARTICLE"
+      ? "El articulo estructurado no contiene cover.foto ni cover.thumbnail."
+      : "No se encontro imagen valida en card; se intentara detalle.";
 
-  if (!image) {
+  if (!image && resolvedSource.source === "DOM_CARD") {
     const detailImage = await tryOpenDetailAndExtractImage(page, matchedCode || code);
     if (detailImage) {
       image = detailImage;
@@ -643,7 +719,7 @@ async function extractCode(page, code) {
     }
   }
 
-  const rawProduct = buildRawProductFromCard(match.card, image, imageObservation);
+  const rawProduct = buildRawProductFromCard(selectedCard, image, imageObservation);
   rawProduct.searchedCode = code;
   rawProduct.matchedCode = matchedCode;
   rawProduct.matchType = matchType;
@@ -655,6 +731,9 @@ async function extractCode(page, code) {
     rule: supplierResolution.rule,
     candidates: supplierResolution.candidates,
   };
+  rawProduct.extractionSource = resolvedSource.source;
+  rawProduct.domCardStatus = resolvedSource.domCardStatus;
+  rawProduct.warnings = resolvedSource.warnings;
   rawProduct.articleLookup = articleLookup.diagnostics;
   if (articleLookup.article) {
     rawProduct.articleId = articleLookup.article.id || null;
@@ -682,9 +761,12 @@ async function extractCode(page, code) {
       matchType,
       supplierResolution: rawProduct.supplierResolution,
       observacion: matchObservation,
+      articleId: normalized.articleId,
+      codComercial: normalized.codComercial,
       codigo: normalized.codigo,
       marcaId: normalized.marcaId,
       marca: normalized.marca,
+      supermedida: normalized.supermedida,
       nombre: normalized.nombre,
       precio: normalized.precio,
       priceSourceLabel: normalized.priceSourceLabel,
@@ -699,6 +781,9 @@ async function extractCode(page, code) {
       imageHeight: normalized.imageHeight,
       observacionesImagen: normalized.observacionesImagen,
       raw: normalized.raw,
+      extractionSource: normalized.extractionSource,
+      domCardStatus: normalized.domCardStatus,
+      warnings: normalized.warnings,
     },
   };
 }
@@ -798,6 +883,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildStructuredArticleCard,
   ensureAuthenticatedSession,
   extractCode,
   extractSupplierPriceFromText,
@@ -805,4 +891,5 @@ module.exports = {
   looksLikeRealImage,
   main,
   readCodes,
+  selectResolvedProductSource,
 };

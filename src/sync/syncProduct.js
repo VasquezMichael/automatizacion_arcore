@@ -314,6 +314,11 @@ async function syncProduct(sourceSku, dependencies = {}) {
     matchedCode: result.matchedCode,
     matchType: result.matchType,
     supplierResolution: result.supplierResolution,
+    articleId: supplierProduct.articleId || null,
+    codComercial: supplierProduct.codComercial || result.matchedCode,
+    codigo: supplierProduct.codigo || null,
+    marcaId: supplierProduct.marcaId || null,
+    supermedida: supplierProduct.supermedida || null,
     name: supplierProduct.nombre || null,
     availability: supplierProduct.estadoDisponibilidad,
     availabilitySource: supplierProduct.availabilitySource || null,
@@ -321,7 +326,10 @@ async function syncProduct(sourceSku, dependencies = {}) {
     priceSourceLabel: supplierProduct.priceSourceLabel || null,
     imageUrl: supplierProduct.imageUrl || null,
     imageSourceType: supplierProduct.imageSourceType || null,
+    extractionSource: supplierProduct.extractionSource || null,
+    domCardStatus: supplierProduct.domCardStatus || null,
   };
+  result.warnings.push(...(supplierProduct.warnings || []));
 
   const lookup = await classifyTiendanube(sourceSku, normalizedSku, client);
   result.classification = lookup.classification;
