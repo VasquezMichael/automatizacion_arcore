@@ -33,6 +33,11 @@
     "executor:test-image-legacy": "node src/executor/testLegacyImageExecution.js",
     "executor:test-create-single": "node src/executor/testSingleCreateExecution.js",
     "executor:test-domain-gates": "node src/executor/testDomainExecutionGates.js",
+    "batch:test": "node src/batch/testBatchSync.js",
+    "sync:batch": "node src/batch/batchCli.js",
+    "catalog:test": "node src/catalog/testCatalogRunner.js",
+    "catalog:scan": "node src/catalog/catalogCli.js --mode SCAN_ONLY",
+    "catalog:plan": "node src/catalog/catalogCli.js --mode PLAN_BATCH",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"

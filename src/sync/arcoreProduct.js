@@ -3,6 +3,28 @@ const { ensureAuthenticatedSession, extractCode } = require("../extractByCodesTe
 const { normalizeProduct } = require("../normalizer/productNormalizer");
 const { loadStorageState } = require("../session");
 
+async function extractArcoreProductFromPage(page, sourceSku) {
+  const extraction = await extractCode(page, sourceSku);
+  if (!extraction.found) {
+    const error = new Error(`No se encontro producto en Arcore para SKU ${sourceSku}.`);
+    error.code =
+      extraction.supplierResolution?.type === "AMBIGUOUS"
+        ? "ARCORE_PRODUCT_AMBIGUOUS"
+        : "ARCORE_PRODUCT_NOT_FOUND";
+    error.supplierResolution = extraction.supplierResolution || {
+      type: "NOT_FOUND",
+      sourceCode: sourceSku,
+      matchedCode: null,
+      rule: null,
+      candidates: [],
+    };
+    error.details = extraction;
+    throw error;
+  }
+
+  return normalizeProduct(extraction.product.raw);
+}
+
 async function extractArcoreProduct(sourceSku) {
   await ensureAuthenticatedSession();
 
@@ -13,25 +35,7 @@ async function extractArcoreProduct(sourceSku) {
   const page = await context.newPage();
 
   try {
-    const extraction = await extractCode(page, sourceSku);
-    if (!extraction.found) {
-      const error = new Error(`No se encontro producto en Arcore para SKU ${sourceSku}.`);
-      error.code =
-        extraction.supplierResolution?.type === "AMBIGUOUS"
-          ? "ARCORE_PRODUCT_AMBIGUOUS"
-          : "ARCORE_PRODUCT_NOT_FOUND";
-      error.supplierResolution = extraction.supplierResolution || {
-        type: "NOT_FOUND",
-        sourceCode: sourceSku,
-        matchedCode: null,
-        rule: null,
-        candidates: [],
-      };
-      error.details = extraction;
-      throw error;
-    }
-
-    return normalizeProduct(extraction.product.raw);
+    return await extractArcoreProductFromPage(page, sourceSku);
   } finally {
     await browser.close();
   }
@@ -39,4 +43,5 @@ async function extractArcoreProduct(sourceSku) {
 
 module.exports = {
   extractArcoreProduct,
+  extractArcoreProductFromPage,
 };
