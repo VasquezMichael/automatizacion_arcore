@@ -337,6 +337,7 @@ async function executeLegacyImageUpdates({
   actions,
   adapter,
   imageTools,
+  stopOnAnyFailure = false,
 }) {
   const issues = [];
   let groupIntegrityFailed = false;
@@ -350,7 +351,13 @@ async function executeLegacyImageUpdates({
       adapter,
       imageTools,
     });
-    if (imageActionIntegrityFailed(action)) {
+    if (
+      imageActionIntegrityFailed(action) ||
+      (stopOnAnyFailure &&
+        ["BLOCKED", "WRITE_FAILED", "WRITE_VERIFICATION_FAILED"].includes(
+          action.executionResult,
+        ))
+    ) {
       groupIntegrityFailed = true;
       issues.push(blockRemaining(actions, index + 1, action, plan));
       break;

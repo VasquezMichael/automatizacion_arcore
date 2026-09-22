@@ -197,14 +197,28 @@ function blockRemaining(actions, startIndex, sourceAction) {
   return issueDetails;
 }
 
-async function executeLegacyStatusUpdates({ plan, actions, adapter }) {
+function statusActionFailed(action) {
+  return ["BLOCKED", "WRITE_FAILED", "WRITE_VERIFICATION_FAILED"].includes(
+    action?.executionResult,
+  );
+}
+
+async function executeLegacyStatusUpdates({
+  plan,
+  actions,
+  adapter,
+  stopOnAnyFailure = false,
+}) {
   const issues = [];
   let groupIntegrityFailed = false;
 
   for (let index = 0; index < actions.length; index += 1) {
     const action = actions[index];
     await executeStatusPublication({ plan, action, adapter });
-    if (statusActionIntegrityFailed(action)) {
+    if (
+      statusActionIntegrityFailed(action) ||
+      (stopOnAnyFailure && statusActionFailed(action))
+    ) {
       groupIntegrityFailed = true;
       issues.push(blockRemaining(actions, index + 1, action));
       break;
@@ -216,6 +230,7 @@ async function executeLegacyStatusUpdates({ plan, actions, adapter }) {
 
 module.exports = {
   executeLegacyStatusUpdates,
+  statusActionFailed,
   statusActionIntegrityFailed,
   validateLegacyStatusExecution,
 };

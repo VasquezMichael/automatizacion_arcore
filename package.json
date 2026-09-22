@@ -42,6 +42,8 @@
     "catalog:plan": "node src/catalog/catalogCli.js --mode PLAN_BATCH",
     "client-scope:test": "node src/clientScope/testClientScope.js",
     "sync:client-scope": "node src/clientScope/clientScopeCli.js",
+    "sync:client-scope:mutable": "node src/mutableBatch/mutableBatchCli.js",
+    "mutable-batch:test": "node src/mutableBatch/testMutableBatch.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -232,7 +232,18 @@ function blockRemainingAction(action, failedPair) {
   );
 }
 
-async function executeLegacyPriceUpdates({ plan, actions, adapter }) {
+function actionWriteFailed(action) {
+  return ["BLOCKED", "WRITE_FAILED", "WRITE_VERIFICATION_FAILED"].includes(
+    action?.executionResult,
+  );
+}
+
+async function executeLegacyPriceUpdates({
+  plan,
+  actions,
+  adapter,
+  stopOnAnyFailure = false,
+}) {
   let failedPair = null;
 
   for (const action of actions) {
@@ -242,7 +253,7 @@ async function executeLegacyPriceUpdates({ plan, actions, adapter }) {
     }
 
     await executePricePublication({ plan, action, adapter });
-    if (actionIntegrityFailed(action)) {
+    if (actionIntegrityFailed(action) || (stopOnAnyFailure && actionWriteFailed(action))) {
       failedPair = pairKey(action);
     }
   }
@@ -263,6 +274,7 @@ async function executeLegacyPriceUpdates({ plan, actions, adapter }) {
 
 module.exports = {
   actionIntegrityFailed,
+  actionWriteFailed,
   executeLegacyPriceUpdates,
   validateLegacyPriceExecution,
 };

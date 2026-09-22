@@ -395,6 +395,7 @@ async function executeLegacyWrites(execution, gates, dependencies, actions) {
       plan: execution.originalPlan,
       actions: statusValidation.statusActions,
       adapter: statusAdapter,
+      stopOnAnyFailure: dependencies.stopOnAnyWriteFailure === true,
     });
     execution.errors.push(
       ...statusValidation.statusActions.flatMap((action) => action.errors || []),
@@ -416,6 +417,7 @@ async function executeLegacyWrites(execution, gates, dependencies, actions) {
       plan: execution.originalPlan,
       actions: priceValidation.priceActions,
       adapter: priceAdapter,
+      stopOnAnyFailure: dependencies.stopOnAnyWriteFailure === true,
     });
     execution.errors.push(
       ...priceValidation.priceActions.flatMap((action) => action.errors || []),
@@ -447,6 +449,7 @@ async function executeLegacyWrites(execution, gates, dependencies, actions) {
       actions: imageValidation.imageActions,
       adapter: imageAdapter,
       imageTools: dependencies.imageTools,
+      stopOnAnyFailure: dependencies.stopOnAnyWriteFailure === true,
     });
     execution.errors.push(
       ...imageValidation.imageActions.flatMap((action) => action.errors || []),
