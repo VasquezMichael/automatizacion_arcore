@@ -19,14 +19,80 @@ function buildCookieHeader() {
 }
 
 function buildSafeDiagnostics({ endpoint, params, response }) {
+  const contentType = response?.headers?.["content-type"] || "";
   return {
     url: axios.getUri({ url: endpoint, params }),
     codigo: params.codigo,
     marcaId: params.marcaId,
     supermedida: params.supermedida,
     httpStatus: response?.status || null,
-    response: response?.data ?? null,
+    contentType,
+    responseType: responseType(contentType),
+    response: /application\/json/i.test(contentType) ? response?.data ?? null : null,
   };
+}
+
+function responseType(contentType) {
+  if (/application\/json/i.test(contentType || "")) return "JSON";
+  if (/text\/html/i.test(contentType || "")) return "HTML";
+  return contentType ? "OTHER" : "UNKNOWN";
+}
+
+function stockError(code, message, diagnostics, cause) {
+  const error = new Error(message);
+  error.code = code;
+  error.diagnostics = diagnostics;
+  if (cause) error.cause = cause;
+  return error;
+}
+
+function validateStockResponse(response, params) {
+  const contentType = response.contentType || "";
+  const diagnostics = {
+    url: response.url || `${baseUrl}/api/stocks`,
+    codigo: params.codigo,
+    marcaId: params.marcaId,
+    supermedida: params.supermedida,
+    httpStatus: response.status ?? null,
+    contentType,
+    responseType: responseType(contentType),
+    response: /application\/json/i.test(contentType) ? response.payload ?? null : null,
+  };
+  const loginRedirect =
+    [301, 302, 303, 307, 308].includes(response.status) ||
+    /\/auth\/login/i.test(response.url || "") ||
+    /\/auth\/login/i.test(response.location || "");
+
+  if (response.status === 401 || loginRedirect) {
+    throw stockError(
+      "STOCK_SESSION_EXPIRED",
+      "La sesion Arcore no es valida para consultar stock.",
+      diagnostics,
+    );
+  }
+  if (response.status < 200 || response.status >= 300) {
+    throw stockError(
+      "STOCK_HTTP_ERROR",
+      `Consulta de stock fallo con status HTTP ${response.status}.`,
+      diagnostics,
+    );
+  }
+  if (!/application\/json/i.test(contentType)) {
+    throw stockError(
+      "STOCK_INVALID_RESPONSE",
+      "Consulta de stock devolvio un contenido no JSON.",
+      diagnostics,
+    );
+  }
+  if (!response.payload || typeof response.payload !== "object" || Array.isArray(response.payload)) {
+    throw stockError(
+      "STOCK_INVALID_RESPONSE",
+      "Consulta de stock devolvio un JSON con formato inesperado.",
+      diagnostics,
+    );
+  }
+
+  return { data: response.payload, diagnostics };
 }
 
 function printDiagnostics(diagnostics) {
@@ -53,30 +119,48 @@ async function queryStockDetailed({ codigo, marcaId, supermedida }) {
     supermedida,
   };
 
-  const response = await axios.get(endpoint, {
-    params,
-    headers: {
-      Cookie: cookieHeader,
-      Accept: "application/json",
-    },
-    timeout: 15000,
-    validateStatus: () => true,
-  });
+  let response;
+  try {
+    response = await axios.get(endpoint, {
+      params,
+      headers: {
+        Cookie: cookieHeader,
+        Accept: "application/json",
+      },
+      timeout: 15000,
+      maxRedirects: 0,
+      validateStatus: () => true,
+    });
+  } catch (cause) {
+    throw stockError(
+      "STOCK_NETWORK_ERROR",
+      "No se pudo completar la consulta de stock por un error de red.",
+      {
+        url: axios.getUri({ url: endpoint, params }),
+        codigo,
+        marcaId,
+        supermedida,
+        httpStatus: null,
+        contentType: null,
+        responseType: "UNKNOWN",
+        response: null,
+      },
+      cause,
+    );
+  }
 
   const diagnostics = buildSafeDiagnostics({ endpoint, params, response });
   printDiagnostics(diagnostics);
-
-  if (response.status < 200 || response.status >= 300) {
-    const error = new Error(`Consulta de stock fallo con status HTTP ${response.status}.`);
-    error.code = "STOCK_REQUEST_FAILED";
-    error.diagnostics = diagnostics;
-    throw error;
-  }
-
-  return {
-    data: response.data,
-    diagnostics,
-  };
+  return validateStockResponse(
+    {
+      status: response.status,
+      url: diagnostics.url,
+      location: response.headers?.location || "",
+      contentType: diagnostics.contentType,
+      payload: response.data,
+    },
+    params,
+  );
 }
 
 async function queryStock(params) {
@@ -85,6 +169,9 @@ async function queryStock(params) {
 }
 
 module.exports = {
+  buildSafeDiagnostics,
   queryStock,
   queryStockDetailed,
+  responseType,
+  validateStockResponse,
 };

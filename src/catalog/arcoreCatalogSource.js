@@ -2,10 +2,12 @@ const { chromium } = require("playwright");
 const { baseUrl } = require("../config");
 const { ensureAuthenticatedSession } = require("../extractByCodesTest");
 const { loadStorageState } = require("../session");
+const { validateStockResponse } = require("../stockClient");
 const { extractArcoreProductFromPage } = require("../sync/arcoreProduct");
 
 const DEFAULT_BACKOFF_MS = Object.freeze([1000, 2000]);
 const DEFAULT_MAX_ATTEMPTS = 3;
+const DEFAULT_PRODUCT_HEALTH_INTERVAL = 25;
 
 class CatalogReadError extends Error {
   constructor(code, message, details = {}) {
@@ -26,8 +28,13 @@ function sleep(ms) {
 function isLoginRedirect(result) {
   return (
     [301, 302, 303, 307, 308].includes(result.status) ||
-    /\/auth\/login/i.test(result.url || "")
+    /\/auth\/login/i.test(result.url || "") ||
+    /\/auth\/login/i.test(result.location || "")
   );
+}
+
+function isSessionError(error) {
+  return ["ARCORE_SESSION_EXPIRED", "STOCK_SESSION_EXPIRED"].includes(error?.code);
 }
 
 function isTransientStatus(status) {
@@ -77,24 +84,34 @@ async function createDefaultTransport() {
     storageState: { cookies: loadStorageState().cookies },
   });
   const page = await context.newPage();
+  async function getJson(url, options) {
+    const response = await context.request.get(url, {
+      ...options,
+      maxRedirects: 0,
+    });
+    const headers = response.headers();
+    const contentType = headers["content-type"] || "";
+    let payload = null;
+    if (response.ok() && /application\/json/i.test(contentType)) {
+      payload = await response.json();
+    }
+    return {
+      status: response.status(),
+      url: response.url(),
+      location: headers.location || "",
+      contentType,
+      payload,
+    };
+  }
   return {
     page,
     async requestPage(pageNumber) {
-      const response = await page.request.get(`${baseUrl}/api/articulos`, {
+      return getJson(`${baseUrl}/api/articulos`, {
         params: { query: "", page: pageNumber },
-        maxRedirects: 0,
       });
-      const contentType = response.headers()["content-type"] || "";
-      let payload = null;
-      if (response.ok() && /application\/json/i.test(contentType)) {
-        payload = await response.json();
-      }
-      return {
-        status: response.status(),
-        url: response.url(),
-        contentType,
-        payload,
-      };
+    },
+    async requestStock(params) {
+      return getJson(`${baseUrl}/api/stocks`, { params });
     },
     async close() {
       await browser.close();
@@ -107,18 +124,25 @@ class ArcoreCatalogSource {
     this.ensureSession = options.ensureSession || ensureAuthenticatedSession;
     this.transportFactory = options.transportFactory || createDefaultTransport;
     this.requestPageOverride = options.requestPage || null;
+    this.requestStockOverride = options.requestStock || null;
     this.extractProductOverride = options.extractProduct || null;
     this.reauthenticateOverride = options.reauthenticate || null;
     this.sleepFn = options.sleepFn || sleep;
     this.backoffMs = options.backoffMs || DEFAULT_BACKOFF_MS;
     this.maxAttempts = options.maxAttempts || DEFAULT_MAX_ATTEMPTS;
+    this.productHealthInterval =
+      options.productHealthInterval || DEFAULT_PRODUCT_HEALTH_INTERVAL;
     this.transport = null;
     this.opened = false;
+    this.productsProcessed = 0;
     this.metrics = {
       requestCount: 0,
       reauthCount: 0,
       contextsOpened: 0,
       healthChecks: 0,
+      sessionRetryCount: 0,
+      stockRequestCount: 0,
+      structuredRequestCount: 0,
     };
   }
 
@@ -147,7 +171,7 @@ class ArcoreCatalogSource {
       return;
     }
     await this.close();
-    await this.ensureSession();
+    await this.ensureSession({ force: true });
     this.transport = await this.transportFactory();
     this.metrics.contextsOpened += 1;
     this.opened = true;
@@ -158,6 +182,13 @@ class ArcoreCatalogSource {
     this.metrics.requestCount += 1;
     if (this.requestPageOverride) return this.requestPageOverride(pageNumber);
     return this.transport.requestPage(pageNumber);
+  }
+
+  async requestStock(params) {
+    await this.open();
+    this.metrics.stockRequestCount += 1;
+    if (this.requestStockOverride) return this.requestStockOverride(params);
+    return this.transport.requestStock(params);
   }
 
   async readPage(pageNumber, options = {}) {
@@ -180,6 +211,7 @@ class ArcoreCatalogSource {
         if (response.status === 401 || isLoginRedirect(response)) {
           if (!reauthenticated) {
             reauthenticated = true;
+            this.metrics.sessionRetryCount += 1;
             try {
               await this.reauthenticate();
             } catch (error) {
@@ -264,10 +296,127 @@ class ArcoreCatalogSource {
     };
   }
 
+  async queryStock(params) {
+    let reauthenticated = false;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      let response;
+      try {
+        response = await this.requestStock(params);
+      } catch (cause) {
+        const error = new CatalogReadError(
+          "STOCK_NETWORK_ERROR",
+          "No se pudo completar la consulta de stock por un error de red.",
+          {
+            codigo: params.codigo,
+            marcaId: params.marcaId,
+            supermedida: params.supermedida,
+            attempts: attempt,
+            causeCode: cause.code || "NETWORK_ERROR",
+          },
+        );
+        error.diagnostics = {
+          codigo: params.codigo,
+          marcaId: params.marcaId,
+          supermedida: params.supermedida,
+          httpStatus: null,
+          contentType: null,
+          responseType: "UNKNOWN",
+          response: null,
+        };
+        throw error;
+      }
+
+      try {
+        return validateStockResponse(response, params);
+      } catch (error) {
+        if (error.code !== "STOCK_SESSION_EXPIRED") throw error;
+        if (reauthenticated) {
+          error.sessionRetryExhausted = true;
+          throw error;
+        }
+        reauthenticated = true;
+        this.metrics.sessionRetryCount += 1;
+        try {
+          await this.reauthenticate();
+        } catch (cause) {
+          const reauthError = new CatalogReadError(
+            "ARCORE_REAUTH_FAILED",
+            "La sesion Arcore expiro y la reautenticacion fallo.",
+            { attempts: attempt, causeCode: cause.code || "ERROR" },
+          );
+          reauthError.diagnostics = error.diagnostics;
+          throw reauthError;
+        }
+      }
+    }
+    throw new CatalogReadError(
+      "STOCK_SESSION_EXPIRED",
+      "La sesion Arcore sigue expirada despues de reautenticar.",
+      { attempts: 2 },
+    );
+  }
+
+  async extractOnce(sourceSku) {
+    const dependencies = {
+      queryStockDetailed: (params) => this.queryStock(params),
+      onStructuredRequest: () => {
+        this.metrics.structuredRequestCount += 1;
+      },
+    };
+    if (this.extractProductOverride) {
+      return this.extractProductOverride(sourceSku, dependencies);
+    }
+    return extractArcoreProductFromPage(this.transport.page, sourceSku, dependencies);
+  }
+
   async extractProduct(sourceSku) {
     await this.open();
-    if (this.extractProductOverride) return this.extractProductOverride(sourceSku);
-    return extractArcoreProductFromPage(this.transport.page, sourceSku);
+    if (
+      this.productsProcessed > 0 &&
+      this.productsProcessed % this.productHealthInterval === 0
+    ) {
+      await this.healthCheck();
+    }
+
+    let retriedAfterSessionRefresh = false;
+    try {
+      while (true) {
+        try {
+          return await this.extractOnce(sourceSku);
+        } catch (error) {
+          if (
+            isSessionError(error) &&
+            !error.sessionRetryExhausted &&
+            !retriedAfterSessionRefresh
+          ) {
+            retriedAfterSessionRefresh = true;
+            this.metrics.sessionRetryCount += 1;
+            try {
+              await this.reauthenticate();
+            } catch (cause) {
+              throw new CatalogReadError(
+                "ARCORE_REAUTH_FAILED",
+                "La sesion Arcore expiro y la reautenticacion fallo.",
+                { causeCode: cause.code || "ERROR" },
+              );
+            }
+            continue;
+          }
+
+          if (error.code === "ARCORE_PRODUCT_NOT_FOUND" && !retriedAfterSessionRefresh) {
+            const previousReauthCount = this.metrics.reauthCount;
+            await this.healthCheck();
+            if (this.metrics.reauthCount > previousReauthCount) {
+              retriedAfterSessionRefresh = true;
+              continue;
+            }
+          }
+          throw error;
+        }
+      }
+    } finally {
+      this.productsProcessed += 1;
+    }
   }
 }
 
@@ -276,7 +425,9 @@ module.exports = {
   CatalogReadError,
   DEFAULT_BACKOFF_MS,
   DEFAULT_MAX_ATTEMPTS,
+  DEFAULT_PRODUCT_HEALTH_INTERVAL,
   createDefaultTransport,
+  isSessionError,
   isTransientNetworkError,
   isTransientStatus,
   validatePayload,

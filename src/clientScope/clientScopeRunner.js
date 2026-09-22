@@ -247,6 +247,7 @@ async function runClientScope(options = {}, dependencies = {}) {
     if (!dependencies.runBatchSync) {
       source = source || new ArcoreCatalogSource(dependencies.sourceOptions);
       await source.open();
+      await source.healthCheck();
       client = client || createTiendanubeReadOnlyClient();
     }
 

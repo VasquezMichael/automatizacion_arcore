@@ -40,6 +40,16 @@ function normalizeProduct(rawProduct) {
   const nombre = cleanString(
     rawProduct.nombre || descripcion || descripcionAlternativa || codigo,
   );
+  const estadoDisponibilidad = classifyAvailability({
+    descripcion,
+    descripcionAlternativa,
+    color,
+  });
+  const availabilityErrorCode =
+    rawProduct.stockErrorCode ||
+    (rawProduct.stock && estadoDisponibilidad === "UNKNOWN"
+      ? "STOCK_UNKNOWN_STATUS"
+      : null);
 
   return {
     externalId: buildExternalId({ codigo: matchedCode || codigo, marcaId, marca }),
@@ -61,11 +71,7 @@ function normalizeProduct(rawProduct) {
     descripcionStock: descripcion,
     descripcionAlternativa,
     color,
-    estadoDisponibilidad: classifyAvailability({
-      descripcion,
-      descripcionAlternativa,
-      color,
-    }),
+    estadoDisponibilidad,
     availabilitySource: {
       source: rawProduct.stock ? "ARCORE_STOCK_API" : "ARCORE_LISTING",
       url: stockDiagnostics.url || null,
@@ -81,7 +87,9 @@ function normalizeProduct(rawProduct) {
           ? stock.notificationVisible
           : null,
       response: stockDiagnostics.response || null,
+      responseType: stockDiagnostics.responseType || null,
       error: rawProduct.stockError || null,
+      errorCode: availabilityErrorCode,
     },
     imageUrl: rawProduct.imageUrl || null,
     imageSource: cleanString(rawProduct.imageFuente || rawProduct.imageSource),

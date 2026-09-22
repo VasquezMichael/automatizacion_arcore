@@ -3,8 +3,8 @@ const { ensureAuthenticatedSession, extractCode } = require("../extractByCodesTe
 const { normalizeProduct } = require("../normalizer/productNormalizer");
 const { loadStorageState } = require("../session");
 
-async function extractArcoreProductFromPage(page, sourceSku) {
-  const extraction = await extractCode(page, sourceSku);
+async function extractArcoreProductFromPage(page, sourceSku, dependencies = {}) {
+  const extraction = await extractCode(page, sourceSku, dependencies);
   if (!extraction.found) {
     const error = new Error(`No se encontro producto en Arcore para SKU ${sourceSku}.`);
     error.code =

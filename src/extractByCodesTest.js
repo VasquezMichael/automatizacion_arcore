@@ -112,13 +112,18 @@ async function hasUsableSession() {
   }
 }
 
-async function ensureAuthenticatedSession() {
-  if (await hasUsableSession()) {
+async function ensureAuthenticatedSession(options = {}) {
+  const force = options.force === true;
+  if (!force && (await hasUsableSession())) {
     console.log("Sesion autenticada vigente. Reutilizando storageState.json.");
     return;
   }
 
-  console.log("No existe sesion vigente. Ejecutando login automatico...");
+  console.log(
+    force
+      ? "Renovando sesion Arcore de forma controlada..."
+      : "No existe sesion vigente. Ejecutando login automatico...",
+  );
   await login();
 
   if (!(await hasUsableSession())) {
@@ -169,21 +174,71 @@ async function searchCode(page, code) {
   };
 }
 
-async function fetchArticleMetadata(page, searchedCode) {
+function structuredSessionError(response) {
+  const status = response.status();
+  const url = response.url();
+  const location = response.headers().location || "";
+  if (
+    status === 401 ||
+    [301, 302, 303, 307, 308].includes(status) ||
+    /\/auth\/login/i.test(url) ||
+    /\/auth\/login/i.test(location)
+  ) {
+    const error = new Error("La sesion Arcore no es valida para consultar articulos.");
+    error.code = "ARCORE_SESSION_EXPIRED";
+    error.diagnostics = { status, url, contentType: response.headers()["content-type"] || "" };
+    return error;
+  }
+  return null;
+}
+
+async function fetchArticleMetadata(page, searchedCode, dependencies = {}) {
   const endpoint = `${baseUrl}/api/articulos`;
   const apiQuery = normalizeCode(searchedCode);
+  const onStructuredRequest = dependencies.onStructuredRequest || (() => {});
   async function fetchPage(pageNumber) {
-    const response = await page.request.get(endpoint, {
-      params: {
-        query: apiQuery,
-        page: pageNumber,
-      },
-    });
+    onStructuredRequest();
+    let response;
+    try {
+      response = await page.request.get(endpoint, {
+        params: {
+          query: apiQuery,
+          page: pageNumber,
+        },
+        maxRedirects: 0,
+      });
+    } catch (cause) {
+      const error = new Error("No se pudo consultar /api/articulos por un error de red.");
+      error.code = "ARCORE_STRUCTURED_NETWORK_ERROR";
+      error.cause = cause;
+      throw error;
+    }
+    const sessionError = structuredSessionError(response);
+    if (sessionError) throw sessionError;
+    const contentType = response.headers()["content-type"] || "";
+    if (!response.ok()) {
+      const error = new Error(
+        `GET /api/articulos fallo con status HTTP ${response.status()}.`,
+      );
+      error.code = "ARCORE_STRUCTURED_HTTP_ERROR";
+      error.diagnostics = {
+        status: response.status(),
+        url: response.url(),
+        contentType,
+      };
+      throw error;
+    }
+    if (response.ok() && !/application\/json/i.test(contentType)) {
+      const error = new Error("GET /api/articulos devolvio un contenido no JSON.");
+      error.code = "ARCORE_STRUCTURED_INVALID_RESPONSE";
+      error.diagnostics = { status: response.status(), url: response.url(), contentType };
+      throw error;
+    }
     return {
       ok: response.ok(),
       status: response.status(),
       url: response.url(),
-      payload: response.ok() ? await response.json() : null,
+      payload: await response.json(),
     };
   }
 
@@ -232,7 +287,21 @@ async function fetchArticleMetadata(page, searchedCode) {
   if (article?.id) {
     const detailUrl = `${endpoint}/${encodeURIComponent(article.id)}`;
     try {
-      const detailResponse = await page.request.get(detailUrl);
+      onStructuredRequest();
+      const detailResponse = await page.request.get(detailUrl, { maxRedirects: 0 });
+      const sessionError = structuredSessionError(detailResponse);
+      if (sessionError) throw sessionError;
+      const contentType = detailResponse.headers()["content-type"] || "";
+      if (detailResponse.ok() && !/application\/json/i.test(contentType)) {
+        const error = new Error("GET /api/articulos/{id} devolvio un contenido no JSON.");
+        error.code = "ARCORE_STRUCTURED_INVALID_RESPONSE";
+        error.diagnostics = {
+          status: detailResponse.status(),
+          url: detailResponse.url(),
+          contentType,
+        };
+        throw error;
+      }
       detailDiagnostics = {
         url: detailResponse.url(),
         httpStatus: detailResponse.status(),
@@ -244,6 +313,12 @@ async function fetchArticleMetadata(page, searchedCode) {
         articleDetail = await detailResponse.json();
       }
     } catch (error) {
+      if (
+        error.code === "ARCORE_SESSION_EXPIRED" ||
+        error.code === "ARCORE_STRUCTURED_INVALID_RESPONSE"
+      ) {
+        throw error;
+      }
       detailDiagnostics = {
         url: detailUrl,
         httpStatus: null,
@@ -465,7 +540,7 @@ async function tryOpenDetailAndExtractImage(page, code) {
   });
 }
 
-async function queryStockIfPossible(rawProduct) {
+async function queryStockIfPossible(rawProduct, stockQuery = queryStockDetailed) {
   const stockCodigo = rawProduct.stockCodigo || rawProduct.codigo;
   const marcaId = rawProduct.marcaId;
   const supermedida = rawProduct.supermedida ?? testSupermedida ?? "";
@@ -485,7 +560,7 @@ async function queryStockIfPossible(rawProduct) {
   }
 
   try {
-    const result = await queryStockDetailed({
+    const result = await stockQuery({
       codigo: stockCodigo,
       marcaId,
       supermedida,
@@ -496,9 +571,13 @@ async function queryStockIfPossible(rawProduct) {
       stockDiagnostics: result.diagnostics,
     };
   } catch (error) {
+    if (["STOCK_SESSION_EXPIRED", "ARCORE_REAUTH_FAILED"].includes(error.code)) {
+      throw error;
+    }
     return {
       stock: null,
       stockError: error.message,
+      stockErrorCode: error.code || "STOCK_UNKNOWN_ERROR",
       stockDiagnostics:
         error.diagnostics || {
           codigo: stockCodigo,
@@ -603,7 +682,7 @@ function selectResolvedProductSource({ articleLookup, match }) {
   };
 }
 
-async function extractCode(page, code) {
+async function extractCode(page, code, dependencies = {}) {
   console.log(`\n[${code}] Abriendo listado de articulos...`);
   await page.goto(`${baseUrl}/articulos`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1000);
@@ -618,7 +697,7 @@ async function extractCode(page, code) {
     };
   }
 
-  const articleLookup = await fetchArticleMetadata(page, code);
+  const articleLookup = await fetchArticleMetadata(page, code, dependencies);
   let supplierResolution = articleLookup.resolution;
 
   if (supplierResolution && !isAutomaticSupplierResolution(supplierResolution)) {
@@ -745,11 +824,12 @@ async function extractCode(page, code) {
     rawProduct.articleMetadata = articleLookup.article;
   }
 
-  const { stock, stockError, stockDiagnostics } =
-    await queryStockIfPossible(rawProduct);
+  const { stock, stockError, stockErrorCode, stockDiagnostics } =
+    await queryStockIfPossible(rawProduct, dependencies.queryStockDetailed);
   rawProduct.stock = stock;
   rawProduct.stockDiagnostics = stockDiagnostics;
   if (stockError) rawProduct.stockError = stockError;
+  if (stockErrorCode) rawProduct.stockErrorCode = stockErrorCode;
 
   const normalized = normalizeProduct(rawProduct);
 
