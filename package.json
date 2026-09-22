@@ -39,6 +39,8 @@
     "catalog:test": "node src/catalog/testCatalogRunner.js",
     "catalog:scan": "node src/catalog/catalogCli.js --mode SCAN_ONLY",
     "catalog:plan": "node src/catalog/catalogCli.js --mode PLAN_BATCH",
+    "client-scope:test": "node src/clientScope/testClientScope.js",
+    "sync:client-scope": "node src/clientScope/clientScopeCli.js",
     "sync:prepare": "node src/syncPrepare.js",
     "start": "npm run test:stock",
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -1,0 +1,1355 @@
+{
+    "schemaVersion":  1,
+    "source":  {
+                   "type":  "CLIENT_PROVIDED_CSV",
+                   "fileName":  "wurzel_client_scope_skus.csv",
+                   "relevantPages":  {
+                                         "from":  1,
+                                         "to":  13
+                                     },
+                   "totalPublicationRows":  176,
+                   "rowsWithSku":  171,
+                   "rowsWithoutSku":  5,
+                   "note":  "El CSV contiene exclusivamente las filas con SKU ya deduplicadas por producto."
+               },
+    "missingSkuRows":  {
+                           "count":  5,
+                           "publicationIds":  [
+                                                  "MLA914168012",
+                                                  "MLA916986060",
+                                                  "MLA925989898"
+                                              ],
+                           "productIds":  [
+                                              "U3632909620"
+                                          ],
+                           "referencesComplete":  false,
+                           "note":  "La fuente CSV excluye las filas sin SKU. Se conservan solo las referencias parciales aportadas por el cliente y no se infiere ningun SKU."
+                       },
+    "items":  [
+                  {
+                      "sourceSku":  "415 0768 09",
+                      "normalizedSku":  "415076809",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2629615218",
+                                             "MLA1586541003"
+                                         ],
+                      "productIds":  [
+                                         "U3566938683"
+                                     ],
+                      "sourcePages":  [
+                                          1,
+                                          2
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0322 10",
+                      "normalizedSku":  "415032210",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1601322115",
+                                             "MLA2579064328"
+                                         ],
+                      "productIds":  [
+                                         "U3565588975"
+                                     ],
+                      "sourcePages":  [
+                                          1,
+                                          2
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "500 1568 10",
+                      "normalizedSku":  "500156810",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2609371820",
+                                             "MLA2661361956"
+                                         ],
+                      "productIds":  [
+                                         "U3639359456"
+                                     ],
+                      "sourcePages":  [
+                                          1,
+                                          3
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0373 10",
+                      "normalizedSku":  "415037310",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2613089274",
+                                             "MLA1596051767"
+                                         ],
+                      "productIds":  [
+                                         "U3642387238"
+                                     ],
+                      "sourcePages":  [
+                                          1,
+                                          2
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0409 10",
+                      "normalizedSku":  "415040910",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1601225375",
+                                             "MLA2580570348"
+                                         ],
+                      "productIds":  [
+                                         "U3574409100"
+                                     ],
+                      "sourcePages":  [
+                                          1,
+                                          3
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0715 10",
+                      "normalizedSku":  "415071510",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1601224345",
+                                             "MLA2581210818"
+                                         ],
+                      "productIds":  [
+                                         "U3574156526"
+                                     ],
+                      "sourcePages":  [
+                                          1,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0381 10",
+                      "normalizedSku":  "415038110",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1611146567",
+                                             "MLA2686392880"
+                                         ],
+                      "productIds":  [
+                                         "U3687633756"
+                                     ],
+                      "sourcePages":  [
+                                          1,
+                                          10
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0697 10",
+                      "normalizedSku":  "415069710",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2632845424",
+                                             "MLA2581077734"
+                                         ],
+                      "productIds":  [
+                                         "U3567544047"
+                                     ],
+                      "sourcePages":  [
+                                          1,
+                                          3
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0388 10",
+                      "normalizedSku":  "415038810",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1601273129",
+                                             "MLA2580999770"
+                                         ],
+                      "productIds":  [
+                                         "U3567488957"
+                                     ],
+                      "sourcePages":  [
+                                          1,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "602 0006 00",
+                      "normalizedSku":  "602000600",
+                      "occurrenceCount":  3,
+                      "publicationIds":  [
+                                             "MLA1602224701",
+                                             "MLA1602263463",
+                                             "MLA1780544727"
+                                         ],
+                      "productIds":  [
+                                         "U3663062778",
+                                         "U3957024602"
+                                     ],
+                      "sourcePages":  [
+                                          2,
+                                          5,
+                                          7
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "559 1003 20",
+                      "normalizedSku":  "559100320",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1606778473",
+                                             "MLA1606789501"
+                                         ],
+                      "productIds":  [
+                                         "U3668634305"
+                                     ],
+                      "sourcePages":  [
+                                          2,
+                                          5
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "3000 389 002",
+                      "normalizedSku":  "3000389002",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1722025351",
+                                             "MLA3132711982"
+                                         ],
+                      "productIds":  [
+                                         "U3870510292"
+                                     ],
+                      "sourcePages":  [
+                                          2,
+                                          11
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 1152 10",
+                      "normalizedSku":  "415115210",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2612882814",
+                                             "MLA2633039148"
+                                         ],
+                      "productIds":  [
+                                         "U3642323776"
+                                     ],
+                      "sourcePages":  [
+                                          2,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0583 10",
+                      "normalizedSku":  "415058310",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2765381908",
+                                             "MLA2765407936"
+                                         ],
+                      "productIds":  [
+                                         "U3710717131"
+                                     ],
+                      "sourcePages":  [
+                                          2,
+                                          10
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "600 0006 00",
+                      "normalizedSku":  "600000600",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2766706954",
+                                             "MLA2765335104"
+                                         ],
+                      "productIds":  [
+                                         "U3720254300"
+                                     ],
+                      "sourcePages":  [
+                                          2,
+                                          10
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0628 10",
+                      "normalizedSku":  "415062810",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2827964708",
+                                             "MLA2827796636"
+                                         ],
+                      "productIds":  [
+                                         "U3775538484"
+                                     ],
+                      "sourcePages":  [
+                                          2,
+                                          10
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "510 0235 11",
+                      "normalizedSku":  "510023511",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1583603231",
+                                             "MLA2578654898"
+                                         ],
+                      "productIds":  [
+                                         "U3559815255"
+                                     ],
+                      "sourcePages":  [
+                                          2,
+                                          8
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0660 10",
+                      "normalizedSku":  "415066010",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1601274145",
+                                             "MLA1585479745"
+                                         ],
+                      "productIds":  [
+                                         "U3571725718"
+                                     ],
+                      "sourcePages":  [
+                                          2,
+                                          4
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0942 10",
+                      "normalizedSku":  "415094210",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1601321667",
+                                             "MLA2581651936"
+                                         ],
+                      "productIds":  [
+                                         "U3567470445"
+                                     ],
+                      "sourcePages":  [
+                                          2,
+                                          3
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "626 3024 09",
+                      "normalizedSku":  "626302409",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1601348143",
+                                             "MLA1586671575"
+                                         ],
+                      "productIds":  [
+                                         "U3575159870"
+                                     ],
+                      "sourcePages":  [
+                                          2,
+                                          4
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "626 3034 09",
+                      "normalizedSku":  "626303409",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1601404333",
+                                             "MLA2634021518"
+                                         ],
+                      "productIds":  [
+                                         "U3651595137"
+                                     ],
+                      "sourcePages":  [
+                                          3,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "627 3040 33",
+                      "normalizedSku":  "627304033",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1605137557",
+                                             "MLA2650400104"
+                                         ],
+                      "productIds":  [
+                                         "U3662235511"
+                                     ],
+                      "sourcePages":  [
+                                          3,
+                                          10
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "529 0586 20",
+                      "normalizedSku":  "529058620",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1606739647",
+                                             "MLA1606749803"
+                                         ],
+                      "productIds":  [
+                                         "U3668448723"
+                                     ],
+                      "sourcePages":  [
+                                          3,
+                                          5
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "622 2400 00",
+                      "normalizedSku":  "622240000",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1780688517",
+                                             "MLA1780663869"
+                                         ],
+                      "productIds":  [
+                                         "U3957520644"
+                                     ],
+                      "sourcePages":  [
+                                          3,
+                                          7
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "626 3019 09",
+                      "normalizedSku":  "626301909",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2613089004",
+                                             "MLA2612562366"
+                                         ],
+                      "productIds":  [
+                                         "U3634618955"
+                                     ],
+                      "sourcePages":  [
+                                          3,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0363 11",
+                      "normalizedSku":  "415036311",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2632935458",
+                                             "MLA2579240410"
+                                         ],
+                      "productIds":  [
+                                         "U3573035764"
+                                     ],
+                      "sourcePages":  [
+                                          3,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "627 3040 09",
+                      "normalizedSku":  "627304009",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2649809698",
+                                             "MLA2649822552"
+                                         ],
+                      "productIds":  [
+                                         "U3670220068"
+                                     ],
+                      "sourcePages":  [
+                                          3,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "510 0035 10",
+                      "normalizedSku":  "510003510",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2662023466",
+                                             "MLA2662357840"
+                                         ],
+                      "productIds":  [
+                                         "U3668396355"
+                                     ],
+                      "sourcePages":  [
+                                          3,
+                                          10
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0493 10",
+                      "normalizedSku":  "415049310",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2687991586",
+                                             "MLA3044311562"
+                                         ],
+                      "productIds":  [
+                                         "U3688416900"
+                                     ],
+                      "sourcePages":  [
+                                          3,
+                                          11
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0431 10",
+                      "normalizedSku":  "415043110",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2765278514",
+                                             "MLA2765590570"
+                                         ],
+                      "productIds":  [
+                                         "U3719580292"
+                                     ],
+                      "sourcePages":  [
+                                          3,
+                                          10
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "626 3077 00",
+                      "normalizedSku":  "626307700",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1594951375",
+                                             "MLA1601348177"
+                                         ],
+                      "productIds":  [
+                                         "U3631196863"
+                                     ],
+                      "sourcePages":  [
+                                          4
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "624 3182 09",
+                      "normalizedSku":  "624318209",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1595986701",
+                                             "MLA1601348201"
+                                         ],
+                      "productIds":  [
+                                         "U3642137394"
+                                     ],
+                      "sourcePages":  [
+                                          4
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "627 3032 09",
+                      "normalizedSku":  "627303209",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1595988453",
+                                             "MLA2629524156"
+                                         ],
+                      "productIds":  [
+                                         "U3642312050"
+                                     ],
+                      "sourcePages":  [
+                                          4,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "626 3022 09",
+                      "normalizedSku":  "626302209",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1596062301",
+                                             "MLA2632909638"
+                                         ],
+                      "productIds":  [
+                                         "U3642226550"
+                                     ],
+                      "sourcePages":  [
+                                          4,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "627 3032 33",
+                      "normalizedSku":  "627303233",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1596063099",
+                                             "MLA2632935124"
+                                         ],
+                      "productIds":  [
+                                         "U3634564865"
+                                     ],
+                      "sourcePages":  [
+                                          4,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "628 3585 09 0",
+                      "normalizedSku":  "6283585090",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1598276377",
+                                             "MLA2579239788"
+                                         ],
+                      "productIds":  [
+                                         "U3572989618"
+                                     ],
+                      "sourcePages":  [
+                                          4,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "630 3106 09",
+                      "normalizedSku":  "630310609",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1601273799",
+                                             "MLA2612343416"
+                                         ],
+                      "productIds":  [
+                                         "U3642199176"
+                                     ],
+                      "sourcePages":  [
+                                          4,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "624 3408 33",
+                      "normalizedSku":  "624340833",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1601347899",
+                                             "MLA2613086360"
+                                         ],
+                      "productIds":  [
+                                         "U3634368705"
+                                     ],
+                      "sourcePages":  [
+                                          4,
+                                          9
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "630 3013 00",
+                      "normalizedSku":  "630301300",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1601350597",
+                                             "MLA1601376125"
+                                         ],
+                      "productIds":  [
+                                         "U3659260918"
+                                     ],
+                      "sourcePages":  [
+                                          4,
+                                          5
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "626 3148 33",
+                      "normalizedSku":  "626314833",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1602135833",
+                                             "MLA1602135957"
+                                         ],
+                      "productIds":  [
+                                         "U3654275295"
+                                     ],
+                      "sourcePages":  [
+                                          5
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "626 3049 09",
+                      "normalizedSku":  "626304909",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1605149771",
+                                             "MLA2650403112"
+                                         ],
+                      "productIds":  [
+                                         "U3670496052"
+                                     ],
+                      "sourcePages":  [
+                                          5,
+                                          10
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "620 3242 09",
+                      "normalizedSku":  "620324209",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1605202517",
+                                             "MLA1605267157"
+                                         ],
+                      "productIds":  [
+                                         "U3670776660"
+                                     ],
+                      "sourcePages":  [
+                                          5
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "626 3049 33",
+                      "normalizedSku":  "626304933",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1605251053",
+                                             "MLA1605263591"
+                                         ],
+                      "productIds":  [
+                                         "U3670545778"
+                                     ],
+                      "sourcePages":  [
+                                          5
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "559 1832 20",
+                      "normalizedSku":  "559183220",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1606729373",
+                                             "MLA1606810205"
+                                         ],
+                      "productIds":  [
+                                         "U3668555015"
+                                     ],
+                      "sourcePages":  [
+                                          5
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "530 0732 10",
+                      "normalizedSku":  "530073210",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1609523521",
+                                             "MLA1609523553"
+                                         ],
+                      "productIds":  [
+                                         "U3675272655"
+                                     ],
+                      "sourcePages":  [
+                                          5,
+                                          6
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "600 0357 00",
+                      "normalizedSku":  "600035700",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1638212429",
+                                             "MLA2768428294"
+                                         ],
+                      "productIds":  [
+                                         "U3713159789"
+                                     ],
+                      "sourcePages":  [
+                                          6,
+                                          10
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "600 0201 00",
+                      "normalizedSku":  "600020100",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1638278865",
+                                             "MLA1638395575"
+                                         ],
+                      "productIds":  [
+                                         "U3713294501"
+                                     ],
+                      "sourcePages":  [
+                                          6
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "624 3474 09",
+                      "normalizedSku":  "624347409",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1666798699",
+                                             "MLA1667000203"
+                                         ],
+                      "productIds":  [
+                                         "U3775099448"
+                                     ],
+                      "sourcePages":  [
+                                          6
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "622 3346 00",
+                      "normalizedSku":  "622334600",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1671481573",
+                                             "MLA1671507523"
+                                         ],
+                      "productIds":  [
+                                         "U3784251986"
+                                     ],
+                      "sourcePages":  [
+                                          6
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "624 3947 00",
+                      "normalizedSku":  "624394700",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1671516507",
+                                             "MLA1671685405"
+                                         ],
+                      "productIds":  [
+                                         "U3774446691"
+                                     ],
+                      "sourcePages":  [
+                                          6
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "3000 951 790",
+                      "normalizedSku":  "3000951790",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1671518913",
+                                             "MLA1671609685"
+                                         ],
+                      "productIds":  [
+                                         "U3774669381"
+                                     ],
+                      "sourcePages":  [
+                                          6
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "530 0512 10",
+                      "normalizedSku":  "530051210",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1671557631",
+                                             "MLA1671687087"
+                                         ],
+                      "productIds":  [
+                                         "U3774621379"
+                                     ],
+                      "sourcePages":  [
+                                          6,
+                                          7
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "600 0143 00",
+                      "normalizedSku":  "600014300",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1671621145",
+                                             "MLA2842124866"
+                                         ],
+                      "productIds":  [
+                                         "U3784012626"
+                                     ],
+                      "sourcePages":  [
+                                          6,
+                                          10
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0239 10",
+                      "normalizedSku":  "415023910",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1756945077",
+                                             "MLA3214827590"
+                                         ],
+                      "productIds":  [
+                                         "U3906308115"
+                                     ],
+                      "sourcePages":  [
+                                          7,
+                                          12
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "624 4103 33",
+                      "normalizedSku":  "624410333",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1756953363",
+                                             "MLA1757022523"
+                                         ],
+                      "productIds":  [
+                                         "U3906444933"
+                                     ],
+                      "sourcePages":  [
+                                          7
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "622 3429 34",
+                      "normalizedSku":  "622342934",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1780665365",
+                                             "MLA1780665409"
+                                         ],
+                      "productIds":  [
+                                         "U3945686457"
+                                     ],
+                      "sourcePages":  [
+                                          7
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "620 3433 00",
+                      "normalizedSku":  "620343300",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1790552603",
+                                             "MLA3328490028"
+                                         ],
+                      "productIds":  [
+                                         "U3978393374"
+                                     ],
+                      "sourcePages":  [
+                                          7,
+                                          12
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0225 10",
+                      "normalizedSku":  "415022510",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1797792911",
+                                             "MLA1797793449"
+                                         ],
+                      "productIds":  [
+                                         "U3993022630"
+                                     ],
+                      "sourcePages":  [
+                                          7
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0320 10",
+                      "normalizedSku":  "415032010",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1797794373",
+                                             "MLA3356172340"
+                                         ],
+                      "productIds":  [
+                                         "U3980350559"
+                                     ],
+                      "sourcePages":  [
+                                          7,
+                                          12
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0221 10",
+                      "normalizedSku":  "415022110",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1843584901",
+                                             "MLA1843609503"
+                                         ],
+                      "productIds":  [
+                                         "U4127477886"
+                                     ],
+                      "sourcePages":  [
+                                          7
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0736 09",
+                      "normalizedSku":  "415073609",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1843644695",
+                                             "MLA1843644921"
+                                         ],
+                      "productIds":  [
+                                         "U4111947209"
+                                     ],
+                      "sourcePages":  [
+                                          8
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0325 10",
+                      "normalizedSku":  "415032510",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1847249841",
+                                             "MLA1847273955"
+                                         ],
+                      "productIds":  [
+                                         "U4121214411"
+                                     ],
+                      "sourcePages":  [
+                                          8
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0768 09 0",
+                      "normalizedSku":  "4150768090",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1850632693",
+                                             "MLA1850688813"
+                                         ],
+                      "productIds":  [
+                                         "U4148167216"
+                                     ],
+                      "sourcePages":  [
+                                          8
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "623 3402 34",
+                      "normalizedSku":  "623340234",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1852535213",
+                                             "MLA1852535529"
+                                         ],
+                      "productIds":  [
+                                         "U4137025531"
+                                     ],
+                      "sourcePages":  [
+                                          8
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "623 3044 00",
+                      "normalizedSku":  "623304400",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1852647705",
+                                             "MLA1852746675"
+                                         ],
+                      "productIds":  [
+                                         "U4138715731"
+                                     ],
+                      "sourcePages":  [
+                                          8
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0549 10 0",
+                      "normalizedSku":  "4150549100",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1852674729",
+                                             "MLA1852674889"
+                                         ],
+                      "productIds":  [
+                                         "U4138849323"
+                                     ],
+                      "sourcePages":  [
+                                          8
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "623 3419 09",
+                      "normalizedSku":  "623341909",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1854653589",
+                                             "MLA3510957756"
+                                         ],
+                      "productIds":  [
+                                         "U4160370892"
+                                     ],
+                      "sourcePages":  [
+                                          8,
+                                          13
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "3000 920 006",
+                      "normalizedSku":  "3000920006",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2847508086",
+                                             "MLA2847870934"
+                                         ],
+                      "productIds":  [
+                                         "U3788009572"
+                                     ],
+                      "sourcePages":  [
+                                          10
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "624 3029 00",
+                      "normalizedSku":  "624302900",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2856206184",
+                                             "MLA2856258092"
+                                         ],
+                      "productIds":  [
+                                         "U3792410184"
+                                     ],
+                      "sourcePages":  [
+                                          10
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "600 0300 00",
+                      "normalizedSku":  "600030000",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA2898543700",
+                                             "MLA2898595736"
+                                         ],
+                      "productIds":  [
+                                         "U3802002353"
+                                     ],
+                      "sourcePages":  [
+                                          11
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "626 3018 09",
+                      "normalizedSku":  "626301809",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3013467784",
+                                             "MLA3013803714"
+                                         ],
+                      "productIds":  [
+                                         "U3831851722"
+                                     ],
+                      "sourcePages":  [
+                                          11
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "626 3018 33",
+                      "normalizedSku":  "626301833",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3013622792",
+                                             "MLA3013622826"
+                                         ],
+                      "productIds":  [
+                                         "U3821896885"
+                                     ],
+                      "sourcePages":  [
+                                          11
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "633 2207 00",
+                      "normalizedSku":  "633220700",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3017452544",
+                                             "MLA3017465586"
+                                         ],
+                      "productIds":  [
+                                         "U3833199726"
+                                     ],
+                      "sourcePages":  [
+                                          11
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "620 3127 00",
+                      "normalizedSku":  "620312700",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3030367140",
+                                             "MLA3030508190"
+                                         ],
+                      "productIds":  [
+                                         "U3840661976"
+                                     ],
+                      "sourcePages":  [
+                                          11
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0485 10",
+                      "normalizedSku":  "415048510",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3030467878",
+                                             "MLA3030505304"
+                                         ],
+                      "productIds":  [
+                                         "U3830441487"
+                                     ],
+                      "sourcePages":  [
+                                          11
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "630 3106 33",
+                      "normalizedSku":  "630310633",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3219608884",
+                                             "MLA3219668036"
+                                         ],
+                      "productIds":  [
+                                         "U3908708687"
+                                     ],
+                      "sourcePages":  [
+                                          12
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "602 0008 00",
+                      "normalizedSku":  "602000800",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3291099932",
+                                             "MLA3291100062"
+                                         ],
+                      "productIds":  [
+                                         "U3945483185"
+                                     ],
+                      "sourcePages":  [
+                                          12
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0396 10",
+                      "normalizedSku":  "415039610",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3315343044",
+                                             "MLA3315343168"
+                                         ],
+                      "productIds":  [
+                                         "U3971715170"
+                                     ],
+                      "sourcePages":  [
+                                          12
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "600 0148 00",
+                      "normalizedSku":  "600014800",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3347551626",
+                                             "MLA3347885206"
+                                         ],
+                      "productIds":  [
+                                         "U3989550022"
+                                     ],
+                      "sourcePages":  [
+                                          12
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "24046020",
+                      "normalizedSku":  "24046020",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3456447794",
+                                             "MLA3459267502"
+                                         ],
+                      "productIds":  [
+                                         "U4099714626"
+                                     ],
+                      "sourcePages":  [
+                                          12
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0185 10",
+                      "normalizedSku":  "415018510",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3489191842",
+                                             "MLA3489204246"
+                                         ],
+                      "productIds":  [
+                                         "U4137066346"
+                                     ],
+                      "sourcePages":  [
+                                          12,
+                                          13
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "415 0273 10",
+                      "normalizedSku":  "415027310",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3505158766",
+                                             "MLA3505340534"
+                                         ],
+                      "productIds":  [
+                                         "U4152945548"
+                                     ],
+                      "sourcePages":  [
+                                          13
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "510 0163 10",
+                      "normalizedSku":  "510016310",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3518830666",
+                                             "MLA3523527608"
+                                         ],
+                      "productIds":  [
+                                         "U4158305935"
+                                     ],
+                      "sourcePages":  [
+                                          13
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "510 0026 10",
+                      "normalizedSku":  "510002610",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA3522309902",
+                                             "MLA3531546620"
+                                         ],
+                      "productIds":  [
+                                         "U4176381108"
+                                     ],
+                      "sourcePages":  [
+                                          13
+                                      ]
+                  },
+                  {
+                      "sourceSku":  "623 3425 00",
+                      "normalizedSku":  "623342500",
+                      "occurrenceCount":  2,
+                      "publicationIds":  [
+                                             "MLA1666813345",
+                                             "MLA2827360436"
+                                         ],
+                      "productIds":  [
+                                         "U3765935023"
+                                     ],
+                      "sourcePages":  [
+                                          13
+                                      ]
+                  }
+              ]
+}
