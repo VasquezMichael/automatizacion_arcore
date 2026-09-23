@@ -45,6 +45,9 @@ function createCheckpoint(plan, filePath = checkpointPath(plan.metadata.runId)) 
         substate: null,
         errors: [],
         warnings: [],
+        approvedSnapshot: domain === "PRICE"
+          ? JSON.parse(JSON.stringify(domainPlan.snapshot))
+          : null,
       });
     }
   }

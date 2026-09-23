@@ -14,7 +14,12 @@ const {
   saveCheckpoint,
 } = require("./mutableBatchCheckpoint");
 const { runMutableBatch, SAFE_ENV } = require("./mutableBatchRunner");
-const { buildPreconditionSnapshot } = require("./mutableBatchPlan");
+const {
+  assertPriceApprovedSnapshotComplete,
+  assertPriceSnapshotExecutable,
+  assertSnapshotUnchanged,
+  buildPreconditionSnapshot,
+} = require("./mutableBatchPlan");
 const { executeLegacyStatusUpdates } = require("../executor/legacyStatusExecution");
 
 const SOURCE_SKU = "415 0768 09 0";
@@ -43,6 +48,7 @@ function fakePlanExecution(options = {}) {
       sku: NORMALIZED_SKU,
       published: options.published ?? true,
       price: options.currentPrice ?? 100,
+      currentPrice: options.currentPrice ?? 100,
       imageId: 30,
       imageCount: 1,
       imageIds: [30],
@@ -55,6 +61,7 @@ function fakePlanExecution(options = {}) {
       sku: NORMALIZED_SKU,
       published: options.published ?? true,
       price: options.currentPrice ?? 100,
+      currentPrice: options.currentPrice ?? 100,
       imageId: 31,
       imageCount: 1,
       imageIds: [31],
@@ -96,8 +103,16 @@ function fakePlanExecution(options = {}) {
       },
       price: {
         action: priceAction,
-        calculation: { calculatedPrice: options.calculatedPrice ?? 150 },
+        calculation: {
+          supplierPrice: options.supplierPrice ?? 100,
+          category: 1,
+          multiplier: 1.5,
+          baseCalculatedPrice: options.calculatedPrice ?? 150,
+          calculatedPrice: options.calculatedPrice ?? 150,
+        },
         publications: publications(priceAction, {
+          currentPrice: options.currentPrice ?? 100,
+          requestedPrice: options.calculatedPrice ?? 150,
           calculatedPrice: options.calculatedPrice ?? 150,
         }),
       },
@@ -634,6 +649,222 @@ test("36. legacy stopOnAnyFailure no ejecuta publicacion siguiente", async () =>
   assert.equal(updateCalls, 1);
   assert.equal(actions[1].executionResult, "BLOCKED");
   assert.equal(result.groupIntegrityFailed, true);
+});
+
+test("37. PLAN SINGLE persiste precios y contexto aprobados", async () => {
+  const report = await runMutableBatch(
+    tempOptions({ mode: "PLAN" }),
+    depsFor(fakePlanExecution()),
+  );
+  const price = report.plan.items[0].domains.PRICE;
+  assert.equal(price.snapshot.publications[0].approvedCurrentPrice, 100);
+  assert.equal(price.snapshot.publications[0].approvedTargetPrice, 150);
+  assert.equal(price.snapshot.supplierPrice, 100);
+  assert.equal(price.snapshot.pricingResult.category, 1);
+  assert.equal(price.snapshot.pricingResult.multiplier, 1.5);
+  assert.equal(price.snapshot.pricingResult.baseCalculatedPrice, 150);
+  assert.equal(price.snapshot.pricingResult.calculatedPrice, 150);
+  assert.equal(price.actions[0].approvedCurrentPrice, 100);
+  assert.equal(price.actions[0].approvedTargetPrice, 150);
+  assert.equal(price.actions[0].normalizedSku, NORMALIZED_SKU);
+  assert.equal(price.actions[0].classification, "SINGLE");
+  assert.equal(price.actions[0].resolution, "EXACT");
+});
+
+test("38. EXECUTE current igual al aprobado permite write", async () => {
+  const expected = buildPreconditionSnapshot(
+    fakePlanExecution({ currentPrice: 100 }).originalPlan,
+    "PRICE",
+  );
+  const actual = buildPreconditionSnapshot(
+    fakePlanExecution({ currentPrice: 100 }).originalPlan,
+    "PRICE",
+  );
+  const result = assertPriceSnapshotExecutable(expected, actual);
+  assert.deepEqual(result.writablePairs, ["10:20"]);
+  assert.deepEqual(result.alreadyCurrentPairs, []);
+});
+
+test("39. EXECUTE current igual al target queda already current", async () => {
+  const expected = buildPreconditionSnapshot(
+    fakePlanExecution({ currentPrice: 100 }).originalPlan,
+    "PRICE",
+  );
+  const actual = buildPreconditionSnapshot(
+    fakePlanExecution({ currentPrice: 150, priceAction: "PRICE_NO_CHANGE" }).originalPlan,
+    "PRICE",
+  );
+  const result = assertPriceSnapshotExecutable(expected, actual);
+  assert.deepEqual(result.writablePairs, []);
+  assert.deepEqual(result.alreadyCurrentPairs, ["10:20"]);
+});
+
+test("40. EXECUTE current distinto de aprobado y target detiene", async () => {
+  const expected = buildPreconditionSnapshot(
+    fakePlanExecution({ currentPrice: 100 }).originalPlan,
+    "PRICE",
+  );
+  const actual = buildPreconditionSnapshot(
+    fakePlanExecution({ currentPrice: 125 }).originalPlan,
+    "PRICE",
+  );
+  assert.throws(
+    () => assertPriceSnapshotExecutable(expected, actual),
+    (error) => error.code === "PRECONDITION_CHANGED",
+  );
+});
+
+test("41. supplierPrice drift produce PRICE_TARGET_DRIFT", async () => {
+  const expected = buildPreconditionSnapshot(fakePlanExecution().originalPlan, "PRICE");
+  const actual = buildPreconditionSnapshot(
+    fakePlanExecution({ supplierPrice: 101 }).originalPlan,
+    "PRICE",
+  );
+  assert.throws(
+    () => assertPriceSnapshotExecutable(expected, actual),
+    (error) => error.code === "PRICE_TARGET_DRIFT",
+  );
+});
+
+test("42. calculated target drift produce PRICE_TARGET_DRIFT", async () => {
+  const expected = buildPreconditionSnapshot(fakePlanExecution().originalPlan, "PRICE");
+  const actual = buildPreconditionSnapshot(
+    fakePlanExecution({ calculatedPrice: 151 }).originalPlan,
+    "PRICE",
+  );
+  assert.throws(
+    () => assertPriceSnapshotExecutable(expected, actual),
+    (error) => error.code === "PRICE_TARGET_DRIFT",
+  );
+});
+
+test("43. approvedCurrentPrice null se rechaza", async () => {
+  const snapshot = buildPreconditionSnapshot(fakePlanExecution().originalPlan, "PRICE");
+  snapshot.publications[0].approvedCurrentPrice = null;
+  assert.throws(
+    () => assertPriceApprovedSnapshotComplete(snapshot),
+    (error) => error.code === "PRICE_APPROVED_SNAPSHOT_INCOMPLETE",
+  );
+});
+
+test("44. checkpoint PRICE viejo se rechaza en resume", async () => {
+  const setup = await createResumeFixture("PRICE", fakePlanExecution());
+  const plan = JSON.parse(fs.readFileSync(setup.planFile, "utf8"));
+  const snapshot = plan.items[0].domains.PRICE.snapshot;
+  snapshot.publications[0] = {
+    productId: 10,
+    variantId: 20,
+    sku: NORMALIZED_SKU,
+    action: "PRICE_UPDATE",
+    price: null,
+    calculatedPrice: 150,
+  };
+  delete snapshot.approvedTargetPrice;
+  delete snapshot.pricingResult;
+  fs.writeFileSync(setup.planFile, JSON.stringify(plan, null, 2));
+  await assert.rejects(
+    runMutableBatch({
+      mode: "EXECUTE",
+      resume: setup.checkpointFile,
+      planFile: setup.planFile,
+      confirmRealWrites: true,
+      persist: false,
+    }, { ...setup.dependencies, env: WRITE_ENV }),
+    (error) => error.code === "PRICE_APPROVED_SNAPSHOT_INCOMPLETE",
+  );
+});
+
+test("45. resume conserva approvedCurrentPrice original", async () => {
+  const setup = await createResumeFixture("PRICE", fakePlanExecution({ currentPrice: 100 }));
+  const report = await runMutableBatch({
+    mode: "PLAN",
+    resume: setup.checkpointFile,
+    planFile: setup.planFile,
+    persist: false,
+  }, setup.dependencies);
+  assert.equal(
+    report.plan.items[0].domains.PRICE.snapshot.publications[0].approvedCurrentPrice,
+    100,
+  );
+  assert.equal(report.perSku[0].approvedSnapshot.publications[0].approvedCurrentPrice, 100);
+});
+
+test("46. LEGACY persiste current y target por publicacion", async () => {
+  const plan = fakePlanExecution({ classification: "LEGACY_GROUP" });
+  plan.originalPlan.plans.price.publications[1].currentPrice = 110;
+  const snapshot = buildPreconditionSnapshot(plan.originalPlan, "PRICE");
+  assert.deepEqual(
+    snapshot.publications.map((item) => item.approvedCurrentPrice),
+    [100, 110],
+  );
+  assert.deepEqual(
+    snapshot.publications.map((item) => item.approvedTargetPrice),
+    [150, 150],
+  );
+});
+
+test("47. LEGACY con drift individual detiene todo el dominio", async () => {
+  const before = fakePlanExecution({ classification: "LEGACY_GROUP" });
+  const after = fakePlanExecution({ classification: "LEGACY_GROUP" });
+  after.originalPlan.plans.price.publications[1].currentPrice = 999;
+  const expected = buildPreconditionSnapshot(before.originalPlan, "PRICE");
+  const actual = buildPreconditionSnapshot(after.originalPlan, "PRICE");
+  assert.throws(
+    () => assertPriceSnapshotExecutable(expected, actual),
+    (error) => error.code === "PRECONDITION_CHANGED",
+  );
+});
+
+test("48. precondition failure no consume budget", async () => {
+  const options = tempOptions({ mode: "EXECUTE", confirmRealWrites: true });
+  const actual = buildPreconditionSnapshot(
+    fakePlanExecution({ currentPrice: 999 }).originalPlan,
+    "PRICE",
+  );
+  const execute = async ({ planItem }) => {
+    assertSnapshotUnchanged(planItem.domains.PRICE.snapshot, actual);
+    assert.fail("no write");
+  };
+  const report = await runMutableBatch(
+    options,
+    depsFor(fakePlanExecution(), execute, { env: WRITE_ENV }),
+  );
+  assert.equal(report.stopped, true);
+  assert.equal(report.stopReason.code, "PRECONDITION_CHANGED");
+  assert.equal(report.budget.writesConsumed, 0);
+  assert.equal(report.writes.length, 0);
+});
+
+test("49. PLAN aprobado nunca escribe", async () => {
+  const report = await runMutableBatch(
+    tempOptions({ mode: "PLAN", confirmRealWrites: true, maxWrites: 10 }),
+    depsFor(fakePlanExecution(), successfulDomain(), { env: WRITE_ENV }),
+  );
+  assert.equal(report.budget.writesConsumed, 0);
+  assert.equal(report.writes.length, 0);
+  assert.equal(report.perSku[0].state, "PLANNED");
+});
+
+test("50. excepcion conserva gates finales seguros", async () => {
+  const options = tempOptions({ mode: "EXECUTE", confirmRealWrites: true });
+  const report = await runMutableBatch(
+    options,
+    depsFor(fakePlanExecution(), async () => {
+      throw Object.assign(new Error("controlled"), { code: "PRECONDITION_CHANGED" });
+    }, { env: WRITE_ENV }),
+  );
+  assert.equal(report.stopped, true);
+  assert.deepEqual(report.finalGates, SAFE_ENV);
+  assert.equal(report.budget.writesConsumed, 0);
+});
+
+test("51. checkpoint PRICE conserva snapshot identico al plan", async () => {
+  const setup = await createResumeFixture("PRICE", fakePlanExecution());
+  const plan = JSON.parse(fs.readFileSync(setup.planFile, "utf8"));
+  assert.deepEqual(
+    setup.item.approvedSnapshot,
+    plan.items[0].domains.PRICE.snapshot,
+  );
 });
 
 async function createResumeFixture(domain, planExecution) {

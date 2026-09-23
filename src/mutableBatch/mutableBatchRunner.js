@@ -33,6 +33,8 @@ const {
   DOMAIN_ORDER,
   MutableBatchPlanError,
   STOP_CONDITIONS,
+  assertPlanPriceSnapshotsComplete,
+  assertPriceApprovedSnapshotComplete,
   assertSnapshotUnchanged,
   buildPlanItem,
   buildPreconditionSnapshot,
@@ -409,7 +411,9 @@ async function defaultExecuteDomain({
   controller,
   checkpointItem,
 }) {
-  const initialSnapshot = planItem.domains[domain].snapshot;
+  const initialSnapshot = domain === "PRICE"
+    ? checkpointItem.approvedSnapshot
+    : planItem.domains[domain].snapshot;
   let freshPlan = null;
   const execution = await executeSyncPlan(planItem.inputSku, {
     env: envForDomain(domain),
@@ -556,6 +560,7 @@ async function buildNewPlan(options, dependencies, runtime, codeVersion, mainVer
     })),
     stopConditions: [...STOP_CONDITIONS],
   };
+  assertPlanPriceSnapshotsComplete(plan);
   const persistPlan = dependencies.persistMutablePlan || persistMutablePlan;
   const planFile = options.persist === false
     ? null
@@ -568,6 +573,41 @@ async function buildNewPlan(options, dependencies, runtime, codeVersion, mainVer
   return { plan, planFile, ...checkpointResult };
 }
 
+function assertResumePriceSnapshotsComplete(plan, checkpoint) {
+  assertPlanPriceSnapshotsComplete(plan);
+  for (const planItem of plan.items || []) {
+    const pricePlan = planItem?.domains?.PRICE;
+    if (!pricePlan || pricePlan.expectedWrites <= 0) continue;
+    const checkpointItem = findCheckpointItem(
+      checkpoint,
+      planItem.normalizedSku,
+      "PRICE",
+    );
+    try {
+      assertPriceApprovedSnapshotComplete(checkpointItem?.approvedSnapshot);
+    } catch (error) {
+      throw new MutableCheckpointError(
+        "PRICE_APPROVED_SNAPSHOT_INCOMPLETE",
+        "El checkpoint PRICE no conserva la precondicion aprobada original.",
+        {
+          normalizedSku: planItem.normalizedSku,
+          cause: error.code || error.message,
+        },
+      );
+    }
+    if (
+      JSON.stringify(checkpointItem.approvedSnapshot) !==
+      JSON.stringify(pricePlan.snapshot)
+    ) {
+      throw new MutableCheckpointError(
+        "PRICE_APPROVED_SNAPSHOT_INCOMPLETE",
+        "El snapshot PRICE del checkpoint difiere del plan aprobado.",
+        { normalizedSku: planItem.normalizedSku },
+      );
+    }
+  }
+}
+
 async function loadResume(options, dependencies, codeVersion) {
   const loaded = loadCheckpoint(options.resume);
   const planFile = options.planFile || planPathForRun(
@@ -575,6 +615,7 @@ async function loadResume(options, dependencies, codeVersion) {
     options.planOutputDir,
   );
   const plan = loadPlanFile(planFile);
+  assertResumePriceSnapshotsComplete(plan, loaded.checkpoint);
   const expected = {
     codeVersion,
     allowlist: options.skus?.length
@@ -722,8 +763,11 @@ async function runMutableBatch(options = {}, dependencies = {}) {
           (action) => actionNeedsWrite(domain, action) && action.executionResult === "SIMULATED",
         );
         if (failure || unresolved || actions.length === 0) {
+          const failureCode = failure?.errors?.[0]?.code;
           const error = new MutableBatchError(
-            failure?.errors?.[0]?.code || "WRITE_VERIFICATION_FAILED",
+            failureCode === "PRICE_PREWRITE_STATE_CHANGED"
+              ? "PRECONDITION_CHANGED"
+              : failureCode || "WRITE_VERIFICATION_FAILED",
             failure?.errors?.[0]?.message || "El dominio no termino completamente verificado.",
             { domain, action: failure?.plannedAction || unresolved?.plannedAction || null },
           );
