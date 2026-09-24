@@ -131,6 +131,30 @@ class MutableWriteController {
     return response;
   }
 
+  markImageUploadVerified({ productId, oldImageId, newImageId }) {
+    if (this.item.domain !== "IMAGE") {
+      return this.stop(
+        "WRITE_OUTSIDE_ENABLED_DOMAIN",
+        "Se intento confirmar un upload IMAGE fuera del dominio IMAGE.",
+      );
+    }
+    if (
+      !newImageId ||
+      String(this.item.returnedIds?.pendingNewImageId || "") !== String(newImageId)
+    ) {
+      return this.stop(
+        "IMAGE_WRITE_VERIFICATION_FAILED",
+        "El newImageId verificado no coincide con el upload persistido.",
+      );
+    }
+    this.item.returnedIds.productId = productId;
+    this.item.returnedIds.oldImageId = oldImageId;
+    this.item.returnedIds.newImageId = newImageId;
+    delete this.item.returnedIds.pendingNewImageId;
+    this.item.substate = "IMAGE_NEW_PRESENT_OLD_NOT_DELETED";
+    this.persist();
+  }
+
   failWrite(audit, error) {
     audit.httpResult = "FAILED";
     audit.completedAt = new Date().toISOString();
@@ -249,10 +273,13 @@ function instrumentImageAdapter(adapter, controller) {
       }),
       adapter.uploadProductImage.bind(adapter),
       (response) => ({
-        substate: "IMAGE_NEW_PRESENT_OLD_NOT_DELETED",
-        returnedIds: { newImageId: response?.id ?? null },
+        substate: "IMAGE_POST_COMPLETED_PENDING_VERIFICATION",
+        returnedIds: { pendingNewImageId: response?.id ?? null },
       }),
     ),
+    markImageUploadVerified(productId, oldImageId, newImageId) {
+      controller.markImageUploadVerified({ productId, oldImageId, newImageId });
+    },
     deleteProductImage: wrapWrite(
       controller,
       (productId, imageId) => ({

@@ -13,8 +13,15 @@ const {
   loadCheckpoint,
   saveCheckpoint,
 } = require("./mutableBatchCheckpoint");
-const { runMutableBatch, SAFE_ENV } = require("./mutableBatchRunner");
 const {
+  applyImageAlreadyCurrentTrace,
+  reconcileImageResume,
+  runMutableBatch,
+  SAFE_ENV,
+} = require("./mutableBatchRunner");
+const {
+  assertImageApprovedSnapshotComplete,
+  assertImageSnapshotExecutable,
   assertPriceApprovedSnapshotComplete,
   assertPriceSnapshotExecutable,
   assertSnapshotUnchanged,
@@ -83,6 +90,7 @@ function fakePlanExecution(options = {}) {
       availability,
       supplierPrice: options.supplierPrice ?? 100,
       name: "Producto controlado",
+      imageSourceType: "COVER_FULL",
     },
     tiendanube: {
       matchCount: matches.length,
@@ -120,7 +128,35 @@ function fakePlanExecution(options = {}) {
         action: imageAction,
         sourceImageUrl: "https://www.arcore.com/catalogoWeb/imagenes/test.png",
         sourceHash: "source-hash",
-        publications: publications(imageAction),
+        publications: publications(imageAction, {
+          tiendanubeImageCount: 1,
+          tiendanubeImageIds: [30],
+          imageId: 30,
+          tiendanubeHash: imageAction === "IMAGE_NO_CHANGE"
+            ? "source-hash"
+            : "target-hash",
+          sourceHash: "source-hash",
+          comparison: {
+            exactMatch: imageAction === "IMAGE_NO_CHANGE",
+            perceptualMatch: imageAction === "IMAGE_NO_CHANGE",
+            sourceExactHash: "source-hash",
+            targetExactHash: imageAction === "IMAGE_NO_CHANGE"
+              ? "source-hash"
+              : "target-hash",
+            sourcePerceptualHash: imageAction === "IMAGE_NO_CHANGE"
+              ? null
+              : "source-fingerprint",
+            targetPerceptualHash: imageAction === "IMAGE_NO_CHANGE"
+              ? null
+              : "target-fingerprint",
+            distance: imageAction === "IMAGE_NO_CHANGE" ? 0 : 95,
+            threshold: 20,
+          },
+        }).map((publication, index) => ({
+          ...publication,
+          tiendanubeImageIds: [30 + index],
+          imageId: 30 + index,
+        })),
       },
     },
     warnings: [],
@@ -196,6 +232,21 @@ function tempOptions(overrides = {}) {
 
 function fakeRuntime() {
   return { metrics: { contextsOpened: 0 }, async close() {} };
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function imageSnapshot(options = {}) {
+  return buildPreconditionSnapshot(
+    fakePlanExecution({
+      imageAction: options.imageAction || "IMAGE_REPLACE",
+      priceAction: "PRICE_NO_CHANGE",
+      classification: options.classification || "SINGLE",
+    }).originalPlan,
+    "IMAGE",
+  );
 }
 
 function depsFor(planExecution, executeDomain, overrides = {}) {
@@ -367,7 +418,7 @@ test("12. IMAGE verify fail no DELETE", async () => {
   }, fixture.controller);
   await adapter.uploadProductImage(1, { src: "https://x/img", position: 1 });
   assert.equal(deletes, 0);
-  assert.equal(fixture.item.substate, "IMAGE_NEW_PRESENT_OLD_NOT_DELETED");
+  assert.equal(fixture.item.substate, "IMAGE_POST_COMPLETED_PENDING_VERIFICATION");
 });
 
 test("13. IMAGE resume after POST no repite POST", async () => {
@@ -598,6 +649,7 @@ test("34. DELETE fallido conserva subestado parcial IMAGE", async () => {
     async deleteProductImage() { throw new Error("delete fail"); },
   }, fixture.controller);
   await adapter.uploadProductImage(1, { src: "https://x/img", position: 1 });
+  adapter.markImageUploadVerified(1, 50, 99);
   await assert.rejects(adapter.deleteProductImage(1, 50));
   assert.equal(fixture.item.substate, "IMAGE_NEW_PRESENT_OLD_NOT_DELETED");
   assert.equal(fixture.item.returnedIds.newImageId, 99);
@@ -865,6 +917,417 @@ test("51. checkpoint PRICE conserva snapshot identico al plan", async () => {
     setup.item.approvedSnapshot,
     plan.items[0].domains.PRICE.snapshot,
   );
+});
+
+test("52. IMAGE SINGLE persiste approvedImageIds", async () => {
+  assert.deepEqual(imageSnapshot().publications[0].approvedImageIds, ["30"]);
+});
+
+test("53. IMAGE SINGLE persiste approvedImageCount", async () => {
+  assert.equal(imageSnapshot().publications[0].approvedImageCount, 1);
+});
+
+test("54. IMAGE SINGLE persiste approvedPrimaryImageId", async () => {
+  assert.equal(imageSnapshot().publications[0].approvedPrimaryImageId, "30");
+});
+
+test("55. IMAGE SINGLE persiste approvedSourceHash", async () => {
+  assert.equal(imageSnapshot().publications[0].approvedSourceHash, "source-hash");
+});
+
+test("56. IMAGE SINGLE persiste approvedSourceFingerprint", async () => {
+  assert.equal(
+    imageSnapshot().publications[0].approvedSourceFingerprint,
+    "source-fingerprint",
+  );
+});
+
+test("57. IMAGE SINGLE persiste approvedCurrentFingerprint", async () => {
+  assert.equal(
+    imageSnapshot().publications[0].approvedCurrentFingerprint,
+    "target-fingerprint",
+  );
+});
+
+test("58. IMAGE SINGLE persiste distancia y threshold", async () => {
+  const publication = imageSnapshot().publications[0];
+  assert.equal(publication.approvedPerceptualDistance, 95);
+  assert.equal(publication.approvedThreshold, 20);
+});
+
+test("59. snapshot IMAGE completo permite ejecucion", async () => {
+  const snapshot = imageSnapshot();
+  assert.equal(assertImageApprovedSnapshotComplete(snapshot), snapshot);
+  assert.deepEqual(assertImageSnapshotExecutable(snapshot, clone(snapshot)), {
+    alreadyCurrentPairs: [],
+    writablePairs: ["10:20"],
+  });
+});
+
+test("60. drift de imageIds produce IMAGE_TARGET_STATE_DRIFT", async () => {
+  const expected = imageSnapshot();
+  const actual = clone(expected);
+  actual.publications[0].approvedImageIds = ["30", "99"];
+  actual.publications[0].approvedImageCount = 2;
+  assert.throws(
+    () => assertImageSnapshotExecutable(expected, actual),
+    (error) => error.code === "IMAGE_TARGET_STATE_DRIFT",
+  );
+});
+
+test("61. drift de imageCount produce IMAGE_TARGET_STATE_DRIFT", async () => {
+  const expected = imageSnapshot();
+  const actual = clone(expected);
+  actual.publications[0].approvedImageCount = 2;
+  assert.throws(
+    () => assertImageSnapshotExecutable(expected, actual),
+    (error) => error.code === "IMAGE_TARGET_STATE_DRIFT",
+  );
+});
+
+test("62. drift de primary image produce IMAGE_TARGET_STATE_DRIFT", async () => {
+  const expected = imageSnapshot();
+  const actual = clone(expected);
+  actual.publications[0].approvedPrimaryImageId = "99";
+  assert.throws(
+    () => assertImageSnapshotExecutable(expected, actual),
+    (error) => error.code === "IMAGE_TARGET_STATE_DRIFT",
+  );
+});
+
+test("63. drift de source URL produce IMAGE_SOURCE_DRIFT", async () => {
+  const expected = imageSnapshot();
+  const actual = clone(expected);
+  actual.publications[0].approvedSourceUrl = "https://www.arcore.com/changed.png";
+  assert.throws(
+    () => assertImageSnapshotExecutable(expected, actual),
+    (error) => error.code === "IMAGE_SOURCE_DRIFT",
+  );
+});
+
+test("64. drift de source hash produce IMAGE_SOURCE_DRIFT", async () => {
+  const expected = imageSnapshot();
+  const actual = clone(expected);
+  actual.publications[0].approvedSourceHash = "changed";
+  assert.throws(
+    () => assertImageSnapshotExecutable(expected, actual),
+    (error) => error.code === "IMAGE_SOURCE_DRIFT",
+  );
+});
+
+test("65. drift de source fingerprint produce IMAGE_SOURCE_DRIFT", async () => {
+  const expected = imageSnapshot();
+  const actual = clone(expected);
+  actual.publications[0].approvedSourceFingerprint = "changed";
+  assert.throws(
+    () => assertImageSnapshotExecutable(expected, actual),
+    (error) => error.code === "IMAGE_SOURCE_DRIFT",
+  );
+});
+
+test("66. drift de current fingerprint produce IMAGE_TARGET_STATE_DRIFT", async () => {
+  const expected = imageSnapshot();
+  const actual = clone(expected);
+  actual.publications[0].approvedCurrentFingerprint = "changed";
+  assert.throws(
+    () => assertImageSnapshotExecutable(expected, actual),
+    (error) => error.code === "IMAGE_TARGET_STATE_DRIFT",
+  );
+});
+
+test("67. drift perceptual que aun requiere replace detiene", async () => {
+  const expected = imageSnapshot();
+  const actual = clone(expected);
+  actual.publications[0].approvedPerceptualDistance = 94;
+  assert.throws(
+    () => assertImageSnapshotExecutable(expected, actual),
+    (error) => error.code === "IMAGE_PRECONDITION_CHANGED",
+  );
+});
+
+test("68. IMAGE_ALREADY_CURRENT queda sin write", async () => {
+  const expected = imageSnapshot();
+  const actual = imageSnapshot({ imageAction: "IMAGE_NO_CHANGE" });
+  const result = assertImageSnapshotExecutable(expected, actual);
+  assert.deepEqual(result.alreadyCurrentPairs, ["10:20"]);
+  const execution = fakePlanExecution({ imageAction: "IMAGE_NO_CHANGE" });
+  applyImageAlreadyCurrentTrace(execution, result.alreadyCurrentPairs);
+  const action = execution.executionPlan.actions.find((item) => item.type === "IMAGE");
+  assert.equal(action.plannedAction, "IMAGE_ALREADY_CURRENT");
+  assert.equal(action.executionResult, "SKIPPED_ALREADY_APPLIED");
+});
+
+test("69. POST persiste pendingNewImageId antes de verificar", async () => {
+  const fixture = checkpointFixture("IMAGE", 2);
+  const adapter = instrumentImageAdapter({
+    async getProduct() { return {}; },
+    async listProductImages() { return []; },
+    async uploadProductImage() { return { id: 99 }; },
+    async deleteProductImage() {},
+  }, fixture.controller);
+  await adapter.uploadProductImage(10, { src: "https://x/img", position: 1 });
+  assert.equal(fixture.item.returnedIds.pendingNewImageId, 99);
+  assert.equal(fixture.item.returnedIds.newImageId, undefined);
+});
+
+test("70. upload verificado promueve newImageId durable", async () => {
+  const fixture = checkpointFixture("IMAGE", 2);
+  const adapter = instrumentImageAdapter({
+    async getProduct() { return {}; },
+    async listProductImages() { return []; },
+    async uploadProductImage() { return { id: 99 }; },
+    async deleteProductImage() {},
+  }, fixture.controller);
+  await adapter.uploadProductImage(10, { src: "https://x/img", position: 1 });
+  adapter.markImageUploadVerified(10, 30, 99);
+  assert.equal(fixture.item.returnedIds.newImageId, 99);
+  assert.equal(fixture.item.returnedIds.oldImageId, 30);
+  assert.equal(fixture.item.returnedIds.pendingNewImageId, undefined);
+  assert.equal(fixture.item.substate, "IMAGE_NEW_PRESENT_OLD_NOT_DELETED");
+});
+
+test("71. DELETE exitoso conserva IDs y subestado", async () => {
+  const fixture = checkpointFixture("IMAGE", 2);
+  const adapter = instrumentImageAdapter({
+    async getProduct() { return {}; },
+    async listProductImages() { return []; },
+    async uploadProductImage() { return { id: 99 }; },
+    async deleteProductImage() {},
+  }, fixture.controller);
+  await adapter.uploadProductImage(10, { src: "https://x/img", position: 1 });
+  adapter.markImageUploadVerified(10, 30, 99);
+  await adapter.deleteProductImage(10, 30);
+  assert.equal(fixture.item.returnedIds.newImageId, 99);
+  assert.equal(fixture.item.returnedIds.deletedImageId, 30);
+  assert.equal(fixture.item.substate, "IMAGE_DELETE_COMPLETED");
+});
+
+test("72. LEGACY conserva snapshot individual por publicacion", async () => {
+  const snapshot = imageSnapshot({ classification: "LEGACY_GROUP" });
+  assert.deepEqual(
+    snapshot.publications.map((item) => ({
+      pair: `${item.productId}:${item.variantId}`,
+      ids: item.approvedImageIds,
+      primary: item.approvedPrimaryImageId,
+    })),
+    [
+      { pair: "10:20", ids: ["30"], primary: "30" },
+      { pair: "11:21", ids: ["31"], primary: "31" },
+    ],
+  );
+});
+
+test("73. LEGACY drift individual detiene antes de siguiente write", async () => {
+  const expected = imageSnapshot({ classification: "LEGACY_GROUP" });
+  const actual = clone(expected);
+  actual.publications[1].approvedCurrentFingerprint = "changed";
+  const options = tempOptions({
+    mode: "EXECUTE",
+    confirmRealWrites: true,
+    enablePRICE: false,
+    enableIMAGE: true,
+    maxWrites: 4,
+  });
+  const execute = async ({ controller }) => {
+    for (let index = 0; index < 2; index += 1) {
+      const audit = controller.beginWrite({
+        domain: "IMAGE",
+        method: index === 0 ? "POST" : "DELETE",
+        resource: `/products/10/images/${index}`,
+        targetState: {},
+      });
+      controller.completeWrite(audit, {});
+    }
+    assertImageSnapshotExecutable(expected, actual);
+  };
+  const report = await runMutableBatch(
+    options,
+    depsFor(
+      fakePlanExecution({
+        classification: "LEGACY_GROUP",
+        imageAction: "IMAGE_REPLACE",
+        priceAction: "PRICE_NO_CHANGE",
+      }),
+      execute,
+      { env: WRITE_ENV },
+    ),
+  );
+  assert.equal(report.stopped, true);
+  assert.equal(report.stopReason.code, "IMAGE_TARGET_STATE_DRIFT");
+  assert.equal(report.budget.writesConsumed, 2);
+});
+
+test("74. checkpoint IMAGE viejo incompleto se rechaza", async () => {
+  const setup = await createResumeFixture(
+    "IMAGE",
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE", priceAction: "PRICE_NO_CHANGE" }),
+  );
+  setup.item.approvedSnapshot = null;
+  saveCheckpoint(setup.checkpoint, setup.checkpointFile);
+  await assert.rejects(
+    runMutableBatch({
+      mode: "PLAN",
+      resume: setup.checkpointFile,
+      planFile: setup.planFile,
+      persist: false,
+    }, setup.dependencies),
+    (error) => error.code === "IMAGE_APPROVED_SNAPSHOT_INCOMPLETE",
+  );
+});
+
+test("75. drift IMAGE no consume budget", async () => {
+  const expected = imageSnapshot();
+  const actual = clone(expected);
+  actual.publications[0].approvedImageIds = ["99"];
+  actual.publications[0].approvedPrimaryImageId = "99";
+  const options = tempOptions({
+    mode: "EXECUTE",
+    confirmRealWrites: true,
+    enablePRICE: false,
+    enableIMAGE: true,
+    maxWrites: 2,
+  });
+  const report = await runMutableBatch(
+    options,
+    depsFor(
+      fakePlanExecution({ imageAction: "IMAGE_REPLACE", priceAction: "PRICE_NO_CHANGE" }),
+      async () => assertImageSnapshotExecutable(expected, actual),
+      { env: WRITE_ENV },
+    ),
+  );
+  assert.equal(report.stopReason.code, "IMAGE_TARGET_STATE_DRIFT");
+  assert.equal(report.budget.writesConsumed, 0);
+});
+
+test("76. PLAN IMAGE mantiene cero writes y gates seguros", async () => {
+  const report = await runMutableBatch(
+    tempOptions({
+      mode: "PLAN",
+      enablePRICE: false,
+      enableIMAGE: true,
+      maxWrites: 2,
+    }),
+    depsFor(fakePlanExecution({ imageAction: "IMAGE_REPLACE" })),
+  );
+  assert.equal(report.budget.writesConsumed, 0);
+  assert.equal(report.writes.length, 0);
+  assert.deepEqual(report.finalGates, SAFE_ENV);
+});
+
+test("77. checkpoint IMAGE conserva snapshot identico al plan", async () => {
+  const setup = await createResumeFixture(
+    "IMAGE",
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE", priceAction: "PRICE_NO_CHANGE" }),
+  );
+  const plan = JSON.parse(fs.readFileSync(setup.planFile, "utf8"));
+  assert.deepEqual(
+    setup.item.approvedSnapshot,
+    plan.items[0].domains.IMAGE.snapshot,
+  );
+});
+
+test("78. resume IMAGE real no repite POST y completa DELETE", async () => {
+  const fixture = checkpointFixture("IMAGE", 2);
+  fixture.item.approvedSnapshot = imageSnapshot();
+  fixture.item.writesConsumed = 1;
+  fixture.item.returnedIds = {
+    productId: 10,
+    oldImageId: 30,
+    newImageId: 99,
+  };
+  fixture.item.substate = "IMAGE_NEW_PRESENT_OLD_NOT_DELETED";
+  fixture.checkpoint.writesConsumed = 1;
+  fixture.checkpoint.auditLog.push({
+    sequence: 1,
+    sku: NORMALIZED_SKU,
+    domain: "IMAGE",
+    method: "POST",
+    resource: "/products/10/images",
+    httpResult: "SUCCESS",
+  });
+  let images = [
+    { id: 99, position: 1, src: "https://tiendanube.example/new.png" },
+    { id: 30, position: 2, src: "https://tiendanube.example/old.png" },
+  ];
+  let deletes = 0;
+  const result = await reconcileImageResume({
+    planItem: {
+      inputSku: SOURCE_SKU,
+      normalizedSku: NORMALIZED_SKU,
+      domains: { IMAGE: { snapshot: fixture.item.approvedSnapshot } },
+    },
+    checkpoint: fixture.checkpoint,
+    checkpointItem: fixture.item,
+    checkpointFile: fixture.file,
+    runtime: {
+      adapters: {
+        IMAGE: {
+          async getProduct() {
+            return { id: 10, variants: [{ id: 20, sku: NORMALIZED_SKU }] };
+          },
+          async listProductImages() { return clone(images); },
+          async uploadProductImage() { assert.fail("resume no debe repetir POST"); },
+          async deleteProductImage(_productId, imageId) {
+            deletes += 1;
+            images = images.filter((image) => String(image.id) !== String(imageId));
+          },
+        },
+      },
+    },
+    currentExecution: fakePlanExecution({
+      imageAction: "IMAGE_NO_CHANGE",
+      priceAction: "PRICE_NO_CHANGE",
+    }),
+  });
+  assert.equal(result.verified, true);
+  assert.equal(result.deleteCompletedOnResume, true);
+  assert.equal(deletes, 1);
+  assert.equal(fixture.checkpoint.writesConsumed, 2);
+  assert.equal(images.some((image) => image.id === 30), false);
+});
+
+test("79. final verification IMAGE inconsistente no queda verificada", async () => {
+  const fixture = checkpointFixture("IMAGE", 2);
+  fixture.item.approvedSnapshot = imageSnapshot();
+  fixture.item.writesConsumed = 1;
+  fixture.item.returnedIds = { productId: 10, oldImageId: 30, newImageId: 99 };
+  fixture.checkpoint.writesConsumed = 1;
+  fixture.checkpoint.auditLog.push({
+    sequence: 1,
+    sku: NORMALIZED_SKU,
+    domain: "IMAGE",
+    method: "POST",
+    resource: "/products/10/images",
+    httpResult: "SUCCESS",
+  });
+  const images = [
+    { id: 99, position: 1, src: "https://tiendanube.example/new.png" },
+    { id: 30, position: 2, src: "https://tiendanube.example/old.png" },
+  ];
+  const result = await reconcileImageResume({
+    planItem: { inputSku: SOURCE_SKU, normalizedSku: NORMALIZED_SKU },
+    checkpoint: fixture.checkpoint,
+    checkpointItem: fixture.item,
+    checkpointFile: fixture.file,
+    runtime: {
+      adapters: {
+        IMAGE: {
+          async getProduct() {
+            return { id: 10, variants: [{ id: 20, sku: NORMALIZED_SKU }] };
+          },
+          async listProductImages() { return clone(images); },
+          async uploadProductImage() { assert.fail("resume no debe repetir POST"); },
+          async deleteProductImage() {},
+        },
+      },
+    },
+    currentExecution: fakePlanExecution({
+      imageAction: "IMAGE_NO_CHANGE",
+      priceAction: "PRICE_NO_CHANGE",
+    }),
+  });
+  assert.equal(result.verified, false);
+  assert.equal(fixture.checkpoint.writesConsumed, 2);
 });
 
 async function createResumeFixture(domain, planExecution) {

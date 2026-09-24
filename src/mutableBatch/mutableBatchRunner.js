@@ -33,6 +33,8 @@ const {
   DOMAIN_ORDER,
   MutableBatchPlanError,
   STOP_CONDITIONS,
+  assertImageApprovedSnapshotComplete,
+  assertPlanImageSnapshotsComplete,
   assertPlanPriceSnapshotsComplete,
   assertPriceApprovedSnapshotComplete,
   assertSnapshotUnchanged,
@@ -223,6 +225,18 @@ function executionPostState(actions) {
   }));
 }
 
+function applyImageAlreadyCurrentTrace(execution, pairs = []) {
+  const alreadyCurrent = new Set(pairs);
+  for (const action of relevantActions(execution, "IMAGE")) {
+    if (alreadyCurrent.has(`${action.productId}:${action.variantId}`)) {
+      action.plannedAction = "IMAGE_ALREADY_CURRENT";
+      action.simulationResult = "SKIPPED_ALREADY_APPLIED";
+      action.executionResult = "SKIPPED_ALREADY_APPLIED";
+    }
+  }
+  return execution;
+}
+
 function sameIdentitySnapshot(initial, current) {
   const fields = [
     "normalizedSku",
@@ -273,11 +287,48 @@ async function reconcileImageResume({
   runtime,
   currentExecution,
 }) {
-  const newImageId = checkpointItem.returnedIds?.newImageId;
-  const initial = planItem.domains.IMAGE.snapshot;
-  const oldImageId = initial.publications.find((publication) => publication.imageId)?.imageId;
-  const match = currentExecution.originalPlan?.tiendanube?.matches?.[0];
-  if (!newImageId || !oldImageId || !match) return { verified: false };
+  const newImageId = checkpointItem.returnedIds?.newImageId ||
+    checkpointItem.returnedIds?.pendingNewImageId;
+  const initial = checkpointItem.approvedSnapshot;
+  assertImageApprovedSnapshotComplete(initial);
+  const latestPost = [...(checkpoint.auditLog || [])]
+    .reverse()
+    .find(
+      (entry) =>
+        entry.sku === checkpointItem.normalizedSku &&
+        entry.domain === "IMAGE" &&
+        entry.method === "POST" &&
+        entry.httpResult === "SUCCESS",
+    );
+  const productId = checkpointItem.returnedIds?.productId ||
+    latestPost?.resource?.match(/^\/products\/([^/]+)\/images$/)?.[1] ||
+    null;
+  const approved = initial.publications.find(
+    (publication) => String(publication.productId) === String(productId),
+  );
+  const match = currentExecution.originalPlan?.tiendanube?.matches?.find(
+    (item) =>
+      String(item.productId) === String(approved?.productId) &&
+      String(item.variantId) === String(approved?.variantId),
+  );
+  if (!newImageId || !approved || !match) return { verified: false };
+
+  const oldImageId = approved.approvedPrimaryImageId;
+  const currentSnapshot = buildPreconditionSnapshot(
+    currentExecution.originalPlan,
+    "IMAGE",
+  );
+  const currentPublication = currentSnapshot.publications.find(
+    (publication) =>
+      String(publication.productId) === String(approved.productId) &&
+      String(publication.variantId) === String(approved.variantId),
+  );
+  const sourceOk =
+    currentPublication?.approvedSourceUrl === approved.approvedSourceUrl &&
+    currentPublication?.approvedSourceType === approved.approvedSourceType &&
+    currentPublication?.approvedSourceHash === approved.approvedSourceHash &&
+    currentPublication?.approvedAction === "IMAGE_NO_CHANGE";
+  if (!sourceOk) return { verified: false };
 
   const adapter = runtime.adapters.IMAGE;
   const product = await adapter.getProduct(match.productId);
@@ -290,32 +341,57 @@ async function reconcileImageResume({
   const newPrimary = images.some(
     (image) => String(image.id) === String(newImageId) && Number(image.position) === 1,
   );
+  const currentIds = images.map((image) => String(image.id)).sort();
+  const expectedWithBoth = [
+    ...approved.approvedImageIds.map(String),
+    String(newImageId),
+  ].sort();
+  const expectedFinal = approved.approvedImageIds
+    .filter((imageId) => String(imageId) !== String(oldImageId))
+    .concat(String(newImageId))
+    .sort();
   const identityOk =
     String(product?.id) === String(match.productId) &&
     variant &&
     String(variant.id) === String(match.variantId) &&
     normalizeSku(variant.sku) === planItem.normalizedSku;
-  const sourceVerified =
-    currentExecution.originalPlan?.plans?.image?.action === "IMAGE_NO_CHANGE";
-  if (!identityOk || !newPresent || !newPrimary || !sourceVerified) {
+  const imageSetOk = JSON.stringify(currentIds) === JSON.stringify(
+    oldPresent ? expectedWithBoth : expectedFinal,
+  );
+  if (!identityOk || !newPresent || !newPrimary || !imageSetOk) {
     return { verified: false };
   }
-  if (!oldPresent) {
-    return {
-      verified: true,
-      resumedWithoutPost: true,
-      newImageId,
-      oldImageId,
-      oldImagePresent: false,
-    };
-  }
-
   const controller = new MutableWriteController({
     checkpoint,
     checkpointItem,
     checkpointFile,
     saveCheckpoint,
   });
+  if (!checkpointItem.returnedIds?.newImageId) {
+    controller.markImageUploadVerified({
+      productId: approved.productId,
+      oldImageId,
+      newImageId,
+    });
+  }
+  if (!oldPresent) {
+    const remaining = planStillNeedsWrite(currentExecution, "IMAGE");
+    return remaining
+      ? {
+          verified: false,
+          continueExecution: true,
+          refreshedSnapshot: currentSnapshot,
+          resumedWithoutPost: true,
+        }
+      : {
+          verified: true,
+          resumedWithoutPost: true,
+          newImageId,
+          oldImageId,
+          oldImagePresent: false,
+        };
+  }
+
   const wrapped = instrumentImageAdapter(adapter, controller);
   await wrapped.getProduct(match.productId);
   await wrapped.listProductImages(match.productId);
@@ -323,8 +399,34 @@ async function reconcileImageResume({
   const finalImages = await wrapped.listProductImages(match.productId);
   const finalOk =
     finalImages.some((image) => String(image.id) === String(newImageId)) &&
-    !finalImages.some((image) => String(image.id) === String(oldImageId));
+    !finalImages.some((image) => String(image.id) === String(oldImageId)) &&
+    JSON.stringify(finalImages.map((image) => String(image.id)).sort()) ===
+      JSON.stringify(expectedFinal);
   if (!finalOk) return { verified: false };
+  if (!planStillNeedsWrite(currentExecution, "IMAGE")) {
+    return {
+      verified: true,
+      resumedWithoutPost: true,
+      deleteCompletedOnResume: true,
+      newImageId,
+      oldImageId,
+    };
+  }
+  const refreshedExecution = await defaultPlanSku(planItem.inputSku, runtime);
+  if (planStillNeedsWrite(refreshedExecution, "IMAGE")) {
+    return {
+      verified: false,
+      continueExecution: true,
+      refreshedSnapshot: buildPreconditionSnapshot(
+        refreshedExecution.originalPlan,
+        "IMAGE",
+      ),
+      resumedWithoutPost: true,
+      deleteCompletedOnResume: true,
+      newImageId,
+      oldImageId,
+    };
+  }
   return {
     verified: true,
     resumedWithoutPost: true,
@@ -365,7 +467,9 @@ async function defaultReconcileResume(context) {
   }
 
   const currentSnapshot = buildPreconditionSnapshot(currentPlan, domain);
-  const initialSnapshot = planItem.domains[domain].snapshot;
+  const initialSnapshot = domain === "IMAGE"
+    ? checkpointItem.approvedSnapshot
+    : planItem.domains[domain].snapshot;
   if (
     !sameIdentitySnapshot(initialSnapshot, currentSnapshot) ||
     !sameDomainTarget(domain, initialSnapshot, currentSnapshot)
@@ -411,9 +515,10 @@ async function defaultExecuteDomain({
   controller,
   checkpointItem,
 }) {
-  const initialSnapshot = domain === "PRICE"
-    ? checkpointItem.approvedSnapshot
+  const initialSnapshot = ["PRICE", "IMAGE"].includes(domain)
+    ? checkpointItem.resumeSnapshot || checkpointItem.approvedSnapshot
     : planItem.domains[domain].snapshot;
+  let snapshotCheck = null;
   let freshPlan = null;
   const execution = await executeSyncPlan(planItem.inputSku, {
     env: envForDomain(domain),
@@ -421,7 +526,7 @@ async function defaultExecuteDomain({
     client: runtime.client,
     syncProduct: async (sku) => {
       freshPlan = await runtime.sync(sku);
-      assertSnapshotUnchanged(
+      snapshotCheck = assertSnapshotUnchanged(
         initialSnapshot,
         buildPreconditionSnapshot(freshPlan, domain),
       );
@@ -442,6 +547,9 @@ async function defaultExecuteDomain({
     ...instrumentedAdapters(runtime, controller),
     stopOnAnyWriteFailure: true,
   });
+  if (domain === "IMAGE" && snapshotCheck?.alreadyCurrentPairs?.length > 0) {
+    applyImageAlreadyCurrentTrace(execution, snapshotCheck.alreadyCurrentPairs);
+  }
   return execution;
 }
 
@@ -561,6 +669,7 @@ async function buildNewPlan(options, dependencies, runtime, codeVersion, mainVer
     stopConditions: [...STOP_CONDITIONS],
   };
   assertPlanPriceSnapshotsComplete(plan);
+  assertPlanImageSnapshotsComplete(plan);
   const persistPlan = dependencies.persistMutablePlan || persistMutablePlan;
   const planFile = options.persist === false
     ? null
@@ -608,6 +717,41 @@ function assertResumePriceSnapshotsComplete(plan, checkpoint) {
   }
 }
 
+function assertResumeImageSnapshotsComplete(plan, checkpoint) {
+  assertPlanImageSnapshotsComplete(plan);
+  for (const planItem of plan.items || []) {
+    const imagePlan = planItem?.domains?.IMAGE;
+    if (!imagePlan || imagePlan.expectedWrites <= 0) continue;
+    const checkpointItem = findCheckpointItem(
+      checkpoint,
+      planItem.normalizedSku,
+      "IMAGE",
+    );
+    try {
+      assertImageApprovedSnapshotComplete(checkpointItem?.approvedSnapshot);
+    } catch (error) {
+      throw new MutableCheckpointError(
+        "IMAGE_APPROVED_SNAPSHOT_INCOMPLETE",
+        "El checkpoint IMAGE no conserva la precondicion aprobada original.",
+        {
+          normalizedSku: planItem.normalizedSku,
+          cause: error.code || error.message,
+        },
+      );
+    }
+    if (
+      JSON.stringify(checkpointItem.approvedSnapshot) !==
+      JSON.stringify(imagePlan.snapshot)
+    ) {
+      throw new MutableCheckpointError(
+        "IMAGE_APPROVED_SNAPSHOT_INCOMPLETE",
+        "El snapshot IMAGE del checkpoint difiere del plan aprobado.",
+        { normalizedSku: planItem.normalizedSku },
+      );
+    }
+  }
+}
+
 async function loadResume(options, dependencies, codeVersion) {
   const loaded = loadCheckpoint(options.resume);
   const planFile = options.planFile || planPathForRun(
@@ -616,6 +760,7 @@ async function loadResume(options, dependencies, codeVersion) {
   );
   const plan = loadPlanFile(planFile);
   assertResumePriceSnapshotsComplete(plan, loaded.checkpoint);
+  assertResumeImageSnapshotsComplete(plan, loaded.checkpoint);
   const expected = {
     codeVersion,
     allowlist: options.skus?.length
@@ -713,7 +858,7 @@ async function runMutableBatch(options = {}, dependencies = {}) {
             continue;
           }
           if (reconciled?.continueExecution) {
-            planItem.domains[domain].snapshot = reconciled.refreshedSnapshot;
+            checkpointItem.resumeSnapshot = reconciled.refreshedSnapshot;
             checkpointItem.state = "PLANNED";
             checkpointItem.substate = "RESUME_REVALIDATED_PENDING_WRITES";
             checkpointItem.prevalidation = {
@@ -803,6 +948,7 @@ module.exports = {
   ACTION_TYPES,
   MutableBatchError,
   SAFE_ENV,
+  applyImageAlreadyCurrentTrace,
   assertExecutionAuthorized,
   createReport,
   defaultExecuteDomain,
@@ -812,5 +958,6 @@ module.exports = {
   normalizeMaxWrites,
   normalizeMode,
   openDefaultRuntime,
+  reconcileImageResume,
   runMutableBatch,
 };

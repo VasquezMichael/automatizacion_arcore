@@ -7,6 +7,10 @@ const STOP_CONDITIONS = Object.freeze([
   "PRECONDITION_CHANGED",
   "PRICE_TARGET_DRIFT",
   "PRICE_APPROVED_SNAPSHOT_INCOMPLETE",
+  "IMAGE_PRECONDITION_CHANGED",
+  "IMAGE_SOURCE_DRIFT",
+  "IMAGE_TARGET_STATE_DRIFT",
+  "IMAGE_APPROVED_SNAPSHOT_INCOMPLETE",
   "WRITE_BUDGET_EXHAUSTED",
   "WRITE_OUTSIDE_ALLOWLIST",
   "WRITE_OUTSIDE_ENABLED_DOMAIN",
@@ -103,7 +107,58 @@ function sortedIdentityPairs(values = []) {
     .sort((a, b) => `${a.productId}:${a.variantId}`.localeCompare(`${b.productId}:${b.variantId}`));
 }
 
-function sortedDomainPairs(values = [], domain, approvedTargetPrice = null) {
+function sortedDomainPairs(
+  values = [],
+  domain,
+  approvedTargetPrice = null,
+  context = {},
+) {
+  if (domain === "IMAGE") {
+    return values
+      .map((item) => {
+        const match = (context.matches || []).find(
+          (candidate) =>
+            String(candidate.productId) === String(item.productId) &&
+            String(candidate.variantId) === String(item.variantId),
+        );
+        const sku = item.sku ?? match?.sku ?? null;
+        return {
+          productId: item.productId ?? null,
+          variantId: item.variantId ?? null,
+          normalizedSku: normalizeSku(sku ?? context.normalizedSku),
+          sku,
+          approvedImageIds: [...(item.tiendanubeImageIds || [])]
+            .map(String)
+            .sort(),
+          approvedImageCount: Number.isInteger(Number(item.tiendanubeImageCount))
+            ? Number(item.tiendanubeImageCount)
+            : null,
+          approvedPrimaryImageId: item.imageId === null || item.imageId === undefined
+            ? null
+            : String(item.imageId),
+          approvedCurrentHash:
+            item.tiendanubeHash || item.comparison?.targetExactHash || null,
+          approvedCurrentFingerprint:
+            item.comparison?.targetPerceptualHash || null,
+          approvedSourceUrl: context.sourceImageUrl || null,
+          approvedSourceType: context.sourceImageType || null,
+          approvedSourceHash:
+            context.sourceHash || item.sourceHash || item.comparison?.sourceExactHash || null,
+          approvedSourceFingerprint:
+            item.comparison?.sourcePerceptualHash || null,
+          approvedPerceptualDistance: Number.isFinite(Number(item.comparison?.distance))
+            ? Number(item.comparison.distance)
+            : null,
+          approvedThreshold: Number.isFinite(Number(item.comparison?.threshold))
+            ? Number(item.comparison.threshold)
+            : null,
+          approvedAction: item.action || null,
+        };
+      })
+      .sort((a, b) =>
+        `${a.productId}:${a.variantId}`.localeCompare(`${b.productId}:${b.variantId}`),
+      );
+  }
   return sortedPairs(values).map((item) => {
     const identity = {
       productId: item.productId,
@@ -125,14 +180,6 @@ function sortedDomainPairs(values = [], domain, approvedTargetPrice = null) {
         approvedTargetPrice: parseMoney(
           item.requestedPrice ?? item.calculatedPrice ?? approvedTargetPrice,
         ),
-      };
-    }
-    if (domain === "IMAGE") {
-      return {
-        ...identity,
-        imageId: item.imageId,
-        imageCount: item.imageCount,
-        imageIds: item.imageIds,
       };
     }
     return item;
@@ -194,8 +241,254 @@ function buildPreconditionSnapshot(plan, domain) {
       domainPlan?.publications,
       domain,
       approvedTargetPrice,
+      {
+        normalizedSku: plan?.normalizedSku || null,
+        sourceImageUrl: plan?.plans?.image?.sourceImageUrl || null,
+        sourceImageType: plan?.supplier?.imageSourceType || null,
+        sourceHash: plan?.plans?.image?.sourceHash || null,
+        matches: plan?.tiendanube?.matches || [],
+      },
     ),
   };
+}
+
+function imageSnapshotIssues(snapshot, requirePublications = true) {
+  const issues = [];
+  if (snapshot?.domain !== "IMAGE") issues.push("domain");
+  if (!snapshot?.normalizedSku) issues.push("normalizedSku");
+  if (!snapshot?.classification) issues.push("classification");
+  if (!snapshot?.supplierResolution) issues.push("supplierResolution");
+  const publications = snapshot?.publications || [];
+  if (requirePublications && publications.length === 0) issues.push("publications");
+
+  for (const publication of publications) {
+    if (publication.approvedAction !== "IMAGE_REPLACE") continue;
+    const imageIds = publication.approvedImageIds;
+    if (publication.productId === null || publication.productId === undefined) {
+      issues.push("productId");
+    }
+    if (publication.variantId === null || publication.variantId === undefined) {
+      issues.push("variantId");
+    }
+    if (publication.normalizedSku !== snapshot.normalizedSku) {
+      issues.push("publicationNormalizedSku");
+    }
+    if (
+      !Array.isArray(imageIds) ||
+      imageIds.length === 0 ||
+      new Set(imageIds.map(String)).size !== imageIds.length
+    ) {
+      issues.push("approvedImageIds");
+    }
+    if (
+      !Number.isInteger(publication.approvedImageCount) ||
+      publication.approvedImageCount <= 0 ||
+      publication.approvedImageCount !== imageIds?.length
+    ) {
+      issues.push("approvedImageCount");
+    }
+    if (
+      !publication.approvedPrimaryImageId ||
+      !imageIds?.map(String).includes(String(publication.approvedPrimaryImageId))
+    ) {
+      issues.push("approvedPrimaryImageId");
+    }
+    for (const field of [
+      "approvedCurrentHash",
+      "approvedCurrentFingerprint",
+      "approvedSourceUrl",
+      "approvedSourceType",
+      "approvedSourceHash",
+      "approvedSourceFingerprint",
+    ]) {
+      if (typeof publication[field] !== "string" || publication[field].length === 0) {
+        issues.push(field);
+      }
+    }
+    if (!Number.isFinite(publication.approvedPerceptualDistance)) {
+      issues.push("approvedPerceptualDistance");
+    }
+    if (!Number.isFinite(publication.approvedThreshold)) {
+      issues.push("approvedThreshold");
+    }
+    if (
+      Number.isFinite(publication.approvedPerceptualDistance) &&
+      Number.isFinite(publication.approvedThreshold) &&
+      publication.approvedPerceptualDistance <= publication.approvedThreshold
+    ) {
+      issues.push("approvedComparisonDoesNotRequireReplace");
+    }
+  }
+  return [...new Set(issues)];
+}
+
+function assertImageApprovedSnapshotComplete(snapshot, options = {}) {
+  const issues = imageSnapshotIssues(
+    snapshot,
+    options.requirePublications !== false,
+  );
+  if (issues.length > 0) {
+    throw new MutableBatchPlanError(
+      "IMAGE_APPROVED_SNAPSHOT_INCOMPLETE",
+      "El plan IMAGE no conserva una precondicion aprobada completa.",
+      { issues },
+    );
+  }
+  return snapshot;
+}
+
+function assertPlanImageSnapshotsComplete(plan) {
+  for (const item of plan?.items || []) {
+    const imagePlan = item?.domains?.IMAGE;
+    if (!imagePlan || imagePlan.expectedWrites <= 0) continue;
+    try {
+      assertImageApprovedSnapshotComplete(imagePlan.snapshot);
+    } catch (error) {
+      if (error.code === "IMAGE_APPROVED_SNAPSHOT_INCOMPLETE") {
+        error.details = {
+          ...(error.details || {}),
+          normalizedSku: item.normalizedSku,
+        };
+      }
+      throw error;
+    }
+  }
+  return plan;
+}
+
+function imagePair(item) {
+  return `${item.productId}:${item.variantId}`;
+}
+
+function sameValue(first, second) {
+  return JSON.stringify(first) === JSON.stringify(second);
+}
+
+function imageIsAlreadyCurrent(publication) {
+  return (
+    publication.approvedAction === "IMAGE_NO_CHANGE" &&
+    (publication.approvedCurrentHash === publication.approvedSourceHash ||
+      (Number.isFinite(publication.approvedPerceptualDistance) &&
+        Number.isFinite(publication.approvedThreshold) &&
+        publication.approvedPerceptualDistance <= publication.approvedThreshold))
+  );
+}
+
+function assertImageSnapshotExecutable(expected, actual) {
+  assertImageApprovedSnapshotComplete(expected);
+  const identityFields = [
+    "sourceSku",
+    "normalizedSku",
+    "matchedCode",
+    "supplierResolution",
+    "classification",
+    "supplierCode",
+    "matchCount",
+    "productIds",
+    "variantIds",
+    "legacy",
+    "matches",
+    "domain",
+  ];
+  if (identityFields.some((field) => !sameValue(expected[field], actual?.[field]))) {
+    throw new MutableBatchPlanError(
+      "IMAGE_PRECONDITION_CHANGED",
+      "La identidad IMAGE actual difiere del plan aprobado.",
+    );
+  }
+
+  const expectedByPair = new Map(expected.publications.map((item) => [imagePair(item), item]));
+  const actualByPair = new Map((actual.publications || []).map((item) => [imagePair(item), item]));
+  if (
+    expectedByPair.size !== expected.publications.length ||
+    actualByPair.size !== actual.publications?.length ||
+    actualByPair.size !== expectedByPair.size
+  ) {
+    throw new MutableBatchPlanError(
+      "IMAGE_PRECONDITION_CHANGED",
+      "La cantidad de publicaciones IMAGE difiere del plan aprobado.",
+    );
+  }
+
+  const alreadyCurrentPairs = [];
+  const writablePairs = [];
+  for (const approved of expected.publications) {
+    const pair = imagePair(approved);
+    const current = actualByPair.get(pair);
+    if (
+      !current ||
+      current.normalizedSku !== approved.normalizedSku ||
+      normalizeSku(current.sku) !== normalizeSku(approved.sku)
+    ) {
+      throw new MutableBatchPlanError(
+        "IMAGE_PRECONDITION_CHANGED",
+        "Una publicacion IMAGE ya no coincide con el plan aprobado.",
+        { pair },
+      );
+    }
+    if (approved.approvedAction !== "IMAGE_REPLACE") continue;
+
+    const sourceFields = [
+      "approvedSourceUrl",
+      "approvedSourceType",
+      "approvedSourceHash",
+    ];
+    if (sourceFields.some((field) => current[field] !== approved[field])) {
+      throw new MutableBatchPlanError(
+        "IMAGE_SOURCE_DRIFT",
+        "La imagen fuente actual difiere de la fuente aprobada.",
+        { pair },
+      );
+    }
+    if (
+      current.approvedSourceFingerprint &&
+      current.approvedSourceFingerprint !== approved.approvedSourceFingerprint
+    ) {
+      throw new MutableBatchPlanError(
+        "IMAGE_SOURCE_DRIFT",
+        "El fingerprint de la imagen fuente difiere del aprobado.",
+        { pair },
+      );
+    }
+
+    if (imageIsAlreadyCurrent(current)) {
+      alreadyCurrentPairs.push(pair);
+      continue;
+    }
+    if (current.approvedAction !== "IMAGE_REPLACE") {
+      throw new MutableBatchPlanError(
+        "IMAGE_PRECONDITION_CHANGED",
+        "La accion IMAGE actual ya no justifica el reemplazo aprobado.",
+        { pair, approvedAction: approved.approvedAction, actualAction: current.approvedAction },
+      );
+    }
+    const targetFields = [
+      "approvedImageIds",
+      "approvedImageCount",
+      "approvedPrimaryImageId",
+      "approvedCurrentHash",
+      "approvedCurrentFingerprint",
+    ];
+    if (targetFields.some((field) => !sameValue(current[field], approved[field]))) {
+      throw new MutableBatchPlanError(
+        "IMAGE_TARGET_STATE_DRIFT",
+        "El estado de imagen Tiendanube difiere del aprobado.",
+        { pair },
+      );
+    }
+    if (
+      current.approvedThreshold !== approved.approvedThreshold ||
+      current.approvedPerceptualDistance !== approved.approvedPerceptualDistance
+    ) {
+      throw new MutableBatchPlanError(
+        "IMAGE_PRECONDITION_CHANGED",
+        "La comparacion perceptual IMAGE difiere de la aprobada.",
+        { pair },
+      );
+    }
+    writablePairs.push(pair);
+  }
+  return { alreadyCurrentPairs, writablePairs };
 }
 
 function priceSnapshotIssues(snapshot, requirePublications = true) {
@@ -491,6 +784,9 @@ function assertSnapshotUnchanged(expected, actual) {
   if (expected?.domain === "PRICE" || actual?.domain === "PRICE") {
     return assertPriceSnapshotExecutable(expected, actual);
   }
+  if (expected?.domain === "IMAGE" || actual?.domain === "IMAGE") {
+    return assertImageSnapshotExecutable(expected, actual);
+  }
   if (JSON.stringify(expected) !== JSON.stringify(actual)) {
     throw new MutableBatchPlanError(
       "PRECONDITION_CHANGED",
@@ -504,6 +800,9 @@ module.exports = {
   DOMAIN_ORDER,
   MutableBatchPlanError,
   STOP_CONDITIONS,
+  assertImageApprovedSnapshotComplete,
+  assertImageSnapshotExecutable,
+  assertPlanImageSnapshotsComplete,
   assertPlanPriceSnapshotsComplete,
   assertPriceApprovedSnapshotComplete,
   assertPriceSnapshotExecutable,

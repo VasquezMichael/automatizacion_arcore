@@ -370,6 +370,13 @@ async function executeSingleImageReplace({
       throw error;
     }
     action.uploadVerified = true;
+    if (typeof adapter.markImageUploadVerified === "function") {
+      adapter.markImageUploadVerified(
+        action.productId,
+        action.oldImageId,
+        action.newImageId,
+      );
+    }
   } catch (error) {
     return failAction(
       action,
