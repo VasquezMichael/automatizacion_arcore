@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sincronización de Catálogo</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="brand-kicker">Arcore → Tiendanube</p>
+      <h1>Sincronización de Catálogo</h1>
+      <p class="header-subtitle">Visión consolidada de productos, disponibilidad y cambios propuestos.</p>
+    </div>
+    <div class="header-actions">
+      <span class="safe-badge">MVP · Modo seguro</span>
+      <button class="primary-button" id="refresh-button" type="button">
+        <span class="button-label">Actualizar análisis</span>
+        <span class="spinner" aria-hidden="true"></span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="status-strip" aria-live="polite">
+      <div>
+        <span class="status-dot" id="session-dot"></span>
+        <span id="session-label">Cargando estado...</span>
+      </div>
+      <p id="last-analysis">Último análisis: —</p>
+    </section>
+
+    <section class="summary-grid" id="summary-grid" aria-label="Resumen del catálogo"></section>
+
+    <section class="catalog-section">
+      <div class="section-heading">
+        <div>
+          <h2>Productos del cliente</h2>
+          <p id="result-count">Cargando productos...</p>
+        </div>
+        <label class="search-field">
+          <span class="visually-hidden">Buscar por SKU o nombre</span>
+          <input id="search-input" type="search" placeholder="Buscar SKU o producto" autocomplete="off">
+        </label>
+      </div>
+
+      <div class="filter-tabs" id="filter-tabs" role="tablist" aria-label="Filtrar productos">
+        <button class="filter-tab active" type="button" data-filter="ALL">Todos</button>
+        <button class="filter-tab" type="button" data-filter="OK">OK</button>
+        <button class="filter-tab" type="button" data-filter="UPDATE_REQUIRED">Requiere actualización</button>
+        <button class="filter-tab" type="button" data-filter="CREATE_REQUIRED">Crear</button>
+        <button class="filter-tab" type="button" data-filter="MANUAL_REVIEW">Revisión manual</button>
+        <button class="filter-tab" type="button" data-filter="NOT_FOUND">No encontrado</button>
+      </div>
+
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Producto</th>
+              <th>Arcore</th>
+              <th>Disponibilidad</th>
+              <th>Tiendanube</th>
+              <th>Precio proveedor</th>
+              <th>Precio Tiendanube</th>
+              <th>Acción</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="products-body"></tbody>
+        </table>
+        <div class="empty-state" id="empty-state" hidden>
+          <h3>No hay análisis disponible</h3>
+          <p>Actualizá el análisis para consultar el estado real del catálogo.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="activity-section">
+      <div class="section-heading">
+        <div>
+          <h2>Actividad reciente</h2>
+          <p>Análisis y ejecuciones registradas por el sistema.</p>
+        </div>
+      </div>
+      <div class="activity-list" id="activity-list"></div>
+    </section>
+  </main>
+
+  <dialog id="product-dialog" aria-labelledby="detail-title">
+    <div class="dialog-header">
+      <div>
+        <p class="dialog-kicker" id="detail-sku"></p>
+        <h2 id="detail-title">Detalle de producto</h2>
+      </div>
+      <button class="icon-button" id="close-dialog" type="button" aria-label="Cerrar detalle" title="Cerrar">×</button>
+    </div>
+    <div class="dialog-body" id="detail-body"></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

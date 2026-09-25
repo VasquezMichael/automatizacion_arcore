@@ -50,6 +50,26 @@ copy .env.example .env
 
 ## Uso
 
+### Dashboard operativo
+
+El dashboard consume el último reporte real del alcance del cliente y permite
+renovar el análisis completo en modo `READ_ONLY`.
+
+```powershell
+npm run dashboard
+```
+
+Abrir `http://localhost:3000`. El puerto puede cambiarse con
+`DASHBOARD_PORT`. La interfaz no expone endpoints de escritura; el botón
+`Actualizar análisis` ejecuta `runClientScope()` con los bloqueos de seguridad
+existentes.
+
+Para ejecutar sus pruebas locales:
+
+```powershell
+npm run dashboard:test
+```
+
 1. Inicia sesión y guarda la sesión autenticada:
 
 ```powershell
