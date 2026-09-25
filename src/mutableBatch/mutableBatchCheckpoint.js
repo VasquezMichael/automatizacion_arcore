@@ -110,6 +110,17 @@ function findCheckpointItem(checkpoint, normalizedSku, domain) {
 }
 
 function validateResume(checkpoint, expected) {
+  if (JSON.stringify(checkpoint.domains) !== JSON.stringify(expected.domains)) {
+    throw new MutableCheckpointError(
+      "MUTABLE_DOMAIN_SET_MISMATCH",
+      "Los dominios del resume deben coincidir exactamente con los dominios originales.",
+      {
+        actual: checkpoint.domains,
+        expected: expected.domains,
+      },
+    );
+  }
+
   const mismatches = [];
   const compare = (field, actual, wanted) => {
     if (JSON.stringify(actual) !== JSON.stringify(wanted)) {
@@ -118,13 +129,48 @@ function validateResume(checkpoint, expected) {
   };
   compare("codeVersion", checkpoint.codeVersion, expected.codeVersion);
   compare("allowlist", checkpoint.allowlist, expected.allowlist);
-  compare("domains", checkpoint.domains, expected.domains);
   compare("maxWrites", checkpoint.maxWrites, expected.maxWrites);
   if (mismatches.length > 0) {
     throw new MutableCheckpointError(
       "RESUME_INCONSISTENT",
       "El checkpoint no coincide con codigo, allowlist, dominios o budget actuales.",
       mismatches,
+    );
+  }
+
+  const expectedKeys = expected.allowlist
+    .flatMap((normalizedSku) =>
+      expected.domains.map((domain) => `${normalizedSku}:${domain}`),
+    )
+    .sort();
+  const actualKeys = (checkpoint.items || [])
+    .map((item) => `${item.normalizedSku}:${item.domain}`)
+    .sort();
+  const consumedByItems = (checkpoint.items || []).reduce(
+    (total, item) => total + Number(item.writesConsumed || 0),
+    0,
+  );
+  const budgetIsConsistent =
+    Number.isInteger(checkpoint.writesConsumed) &&
+    checkpoint.writesConsumed >= 0 &&
+    checkpoint.writesConsumed <= checkpoint.maxWrites &&
+    consumedByItems === checkpoint.writesConsumed;
+
+  if (
+    JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys) ||
+    new Set(actualKeys).size !== actualKeys.length ||
+    !budgetIsConsistent
+  ) {
+    throw new MutableCheckpointError(
+      "CHECKPOINT_INCONSISTENT",
+      "El checkpoint no conserva items o presupuesto consistentes con el run autorizado.",
+      {
+        actualKeys,
+        expectedKeys,
+        writesConsumed: checkpoint.writesConsumed,
+        consumedByItems,
+        maxWrites: checkpoint.maxWrites,
+      },
     );
   }
 }

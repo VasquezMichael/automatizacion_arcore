@@ -18,6 +18,7 @@ const STOP_CONDITIONS = Object.freeze([
   "WRITE_VERIFICATION_FAILED",
   "CHECKPOINT_INCONSISTENT",
   "RESUME_INCONSISTENT",
+  "MUTABLE_DOMAIN_SET_MISMATCH",
 ]);
 
 class MutableBatchPlanError extends Error {

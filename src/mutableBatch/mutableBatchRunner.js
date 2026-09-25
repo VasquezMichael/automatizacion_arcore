@@ -117,6 +117,12 @@ function normalizeMaxWrites(value, mode) {
   return parsed;
 }
 
+function assertEnabledPlanSnapshotsComplete(plan, domains) {
+  if (domains.includes("PRICE")) assertPlanPriceSnapshotsComplete(plan);
+  if (domains.includes("IMAGE")) assertPlanImageSnapshotsComplete(plan);
+  return plan;
+}
+
 function domainEnvKey(domain) {
   return `TIENDANUBE_${domain}_EXECUTION_ENABLED`;
 }
@@ -668,8 +674,7 @@ async function buildNewPlan(options, dependencies, runtime, codeVersion, mainVer
     })),
     stopConditions: [...STOP_CONDITIONS],
   };
-  assertPlanPriceSnapshotsComplete(plan);
-  assertPlanImageSnapshotsComplete(plan);
+  assertEnabledPlanSnapshotsComplete(plan, domains);
   const persistPlan = dependencies.persistMutablePlan || persistMutablePlan;
   const planFile = options.persist === false
     ? null
@@ -752,6 +757,15 @@ function assertResumeImageSnapshotsComplete(plan, checkpoint) {
   }
 }
 
+function assertEnabledResumeSnapshotsComplete(plan, checkpoint, domains) {
+  if (domains.includes("PRICE")) {
+    assertResumePriceSnapshotsComplete(plan, checkpoint);
+  }
+  if (domains.includes("IMAGE")) {
+    assertResumeImageSnapshotsComplete(plan, checkpoint);
+  }
+}
+
 async function loadResume(options, dependencies, codeVersion) {
   const loaded = loadCheckpoint(options.resume);
   const planFile = options.planFile || planPathForRun(
@@ -759,21 +773,26 @@ async function loadResume(options, dependencies, codeVersion) {
     options.planOutputDir,
   );
   const plan = loadPlanFile(planFile);
-  assertResumePriceSnapshotsComplete(plan, loaded.checkpoint);
-  assertResumeImageSnapshotsComplete(plan, loaded.checkpoint);
+  const requestedDomains = selectedDomains(options);
+  const enabledDomains = requestedDomains.length
+    ? requestedDomains
+    : plan.metadata.domains;
   const expected = {
     codeVersion,
     allowlist: options.skus?.length
       ? prepareAllowlist(options.skus, options.scopeFile).items.map((item) => item.normalizedSku)
       : plan.metadata.allowlist,
-    domains: selectedDomains(options).length
-      ? selectedDomains(options)
-      : plan.metadata.domains,
+    domains: enabledDomains,
     maxWrites: options.maxWrites === undefined
       ? plan.metadata.maxWrites
       : normalizeMaxWrites(options.maxWrites, "EXECUTE"),
   };
   validateResume(loaded.checkpoint, expected);
+  assertEnabledResumeSnapshotsComplete(
+    plan,
+    loaded.checkpoint,
+    enabledDomains,
+  );
   if (loaded.checkpoint.stopped && options.resumeStopped !== true) {
     throw new MutableCheckpointError(
       "MUTABLE_CHECKPOINT_STOPPED",

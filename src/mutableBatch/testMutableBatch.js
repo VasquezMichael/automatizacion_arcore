@@ -1330,23 +1330,282 @@ test("79. final verification IMAGE inconsistente no queda verificada", async () 
   assert.equal(fixture.checkpoint.writesConsumed, 2);
 });
 
-async function createResumeFixture(domain, planExecution) {
+test("80. IMAGE-only ignora snapshot PRICE incompleto", async () => {
+  const setup = await createResumeFixture(
+    "IMAGE",
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE", priceAction: "PRICE_UPDATE" }),
+  );
+  rewritePlanSnapshot(setup.planFile, "PRICE", null);
+  const report = await resumePlan(setup);
+  assert.deepEqual(report.plan.metadata.domains, ["IMAGE"]);
+  assert.equal(report.budget.writesConsumed, 0);
+});
+
+test("81. IMAGE-only ignora snapshot STATUS incompleto", async () => {
+  const setup = await createResumeFixture(
+    "IMAGE",
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE", statusAction: "UNPUBLISH" }),
+  );
+  rewritePlanSnapshot(setup.planFile, "STATUS", null);
+  const report = await resumePlan(setup);
+  assert.deepEqual(report.plan.metadata.domains, ["IMAGE"]);
+});
+
+test("82. IMAGE-only ignora snapshot CREATE incompleto", async () => {
+  const setup = await createResumeFixture(
+    "IMAGE",
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE" }),
+  );
+  rewritePlanSnapshot(setup.planFile, "CREATE", null);
+  const report = await resumePlan(setup);
+  assert.deepEqual(report.plan.metadata.domains, ["IMAGE"]);
+});
+
+test("83. IMAGE-only rechaza snapshot IMAGE incompleto", async () => {
+  const setup = await createResumeFixture(
+    "IMAGE",
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE" }),
+  );
+  rewritePlanSnapshot(setup.planFile, "IMAGE", null);
+  await assert.rejects(
+    resumePlan(setup),
+    (error) => error.code === "IMAGE_APPROVED_SNAPSHOT_INCOMPLETE",
+  );
+});
+
+test("84. PRICE-only ignora snapshot IMAGE incompleto", async () => {
+  const setup = await createResumeFixture(
+    "PRICE",
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE" }),
+  );
+  rewritePlanSnapshot(setup.planFile, "IMAGE", null);
+  const report = await resumePlan(setup);
+  assert.deepEqual(report.plan.metadata.domains, ["PRICE"]);
+});
+
+test("85. PRICE-only rechaza snapshot PRICE incompleto", async () => {
+  const setup = await createResumeFixture("PRICE", fakePlanExecution());
+  rewritePlanSnapshot(setup.planFile, "PRICE", null);
+  await assert.rejects(
+    resumePlan(setup),
+    (error) => error.code === "PRICE_APPROVED_SNAPSHOT_INCOMPLETE",
+  );
+});
+
+test("86. STATUS-only ignora snapshots de otros dominios", async () => {
+  const setup = await createResumeFixture(
+    "STATUS",
+    fakePlanExecution({
+      statusAction: "UNPUBLISH",
+      priceAction: "PRICE_UPDATE",
+      imageAction: "IMAGE_REPLACE",
+    }),
+  );
+  rewritePlanSnapshots(setup.planFile, ["PRICE", "IMAGE", "CREATE"], null);
+  const report = await resumePlan(setup);
+  assert.deepEqual(report.plan.metadata.domains, ["STATUS"]);
+});
+
+test("87. CREATE-only ignora snapshots de otros dominios", async () => {
+  const setup = await createResumeFixture(
+    "CREATE",
+    fakePlanExecution({ classification: "CREATE_SINGLE" }),
+  );
+  rewritePlanSnapshots(setup.planFile, ["PRICE", "STATUS", "IMAGE"], null);
+  const report = await resumePlan(setup);
+  assert.deepEqual(report.plan.metadata.domains, ["CREATE"]);
+});
+
+test("88. PRICE+STATUS persiste y valida ambos dominios", async () => {
+  const setup = await createResumeFixtureDomains(
+    ["PRICE", "STATUS"],
+    fakePlanExecution({ statusAction: "UNPUBLISH" }),
+  );
+  const report = await resumePlan(setup, { enablePRICE: true, enableSTATUS: true });
+  assert.deepEqual(report.plan.metadata.domains, ["PRICE", "STATUS"]);
+  assert.deepEqual(
+    setup.checkpoint.items.map((item) => item.domain),
+    ["PRICE", "STATUS"],
+  );
+});
+
+test("89. PRICE+IMAGE valida snapshots de ambos dominios", async () => {
+  const setup = await createResumeFixtureDomains(
+    ["PRICE", "IMAGE"],
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE" }),
+  );
+  rewritePlanSnapshot(setup.planFile, "IMAGE", null);
+  await assert.rejects(
+    resumePlan(setup, { enablePRICE: true, enableIMAGE: true }),
+    (error) => error.code === "IMAGE_APPROVED_SNAPSHOT_INCOMPLETE",
+  );
+});
+
+test("90. item multi-dominio no bloquea por dominio no autorizado", async () => {
+  const setup = await createResumeFixture(
+    "IMAGE",
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE", priceAction: "PRICE_UPDATE" }),
+  );
+  rewritePlanSnapshot(setup.planFile, "PRICE", null);
+  const report = await runMutableBatch({
+    mode: "EXECUTE",
+    resume: setup.checkpointFile,
+    planFile: setup.planFile,
+    enableIMAGE: true,
+    confirmRealWrites: true,
+    persist: false,
+  }, {
+    ...setup.dependencies,
+    env: WRITE_ENV,
+    executeDomain: successfulDomain(2, "IMAGE_REPLACE"),
+  });
+  assert.equal(report.stopped, false);
+  assert.equal(report.budget.writesConsumed, 2);
+  assert.equal(report.writes.every((write) => write.domain === "IMAGE"), true);
+});
+
+test("91. resume IMAGE-only conserva el dominio original", async () => {
+  const setup = await createResumeFixture(
+    "IMAGE",
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE" }),
+  );
+  const report = await resumePlan(setup, { enableIMAGE: true });
+  assert.deepEqual(report.plan.metadata.domains, ["IMAGE"]);
+  assert.deepEqual(report.perSku.map((item) => item.domain), ["IMAGE"]);
+});
+
+test("92. resume IMAGE-only no permite agregar PRICE", async () => {
+  const setup = await createResumeFixture(
+    "IMAGE",
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE" }),
+  );
+  await assert.rejects(
+    resumePlan(setup, { enablePRICE: true, enableIMAGE: true }),
+    (error) => error.code === "MUTABLE_DOMAIN_SET_MISMATCH",
+  );
+});
+
+test("93. resume no permite quitar IMAGE", async () => {
+  const setup = await createResumeFixtureDomains(
+    ["PRICE", "IMAGE"],
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE" }),
+  );
+  await assert.rejects(
+    resumePlan(setup, { enablePRICE: true }),
+    (error) => error.code === "MUTABLE_DOMAIN_SET_MISMATCH",
+  );
+});
+
+test("94. domain set queda persistido en plan y checkpoint", async () => {
+  const setup = await createResumeFixtureDomains(
+    ["STATUS", "IMAGE"],
+    fakePlanExecution({ statusAction: "UNPUBLISH", imageAction: "IMAGE_REPLACE" }),
+  );
+  const plan = JSON.parse(fs.readFileSync(setup.planFile, "utf8"));
+  assert.deepEqual(plan.metadata.domains, ["STATUS", "IMAGE"]);
+  assert.deepEqual(setup.checkpoint.domains, ["STATUS", "IMAGE"]);
+});
+
+test("95. validation failure no consume budget", async () => {
+  const setup = await createResumeFixture(
+    "IMAGE",
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE" }),
+  );
+  rewritePlanSnapshot(setup.planFile, "IMAGE", null);
+  await assert.rejects(resumePlan(setup));
+  const loaded = loadCheckpoint(setup.checkpointFile).checkpoint;
+  assert.equal(loaded.writesConsumed, 0);
+  assert.equal(loaded.auditLog.length, 0);
+});
+
+test("96. PLAN IMAGE-only conserva cero writes con PRICE incompleto", async () => {
+  const execution = fakePlanExecution({
+    imageAction: "IMAGE_REPLACE",
+    priceAction: "PRICE_UPDATE",
+  });
+  execution.originalPlan.supplier.supplierPrice = null;
+  execution.originalPlan.plans.price.calculation = null;
+  const report = await runMutableBatch(
+    tempOptions({
+      mode: "PLAN",
+      enablePRICE: false,
+      enableIMAGE: true,
+      maxWrites: 2,
+    }),
+    depsFor(execution),
+  );
+  assert.equal(report.budget.writesConsumed, 0);
+  assert.equal(report.writes.length, 0);
+});
+
+test("97. excepcion de validacion conserva gates y checkpoint seguros", async () => {
+  const setup = await createResumeFixture(
+    "IMAGE",
+    fakePlanExecution({ imageAction: "IMAGE_REPLACE" }),
+  );
+  rewritePlanSnapshot(setup.planFile, "IMAGE", null);
+  const env = { ...SAFE_ENV };
+  await assert.rejects(resumePlan(setup, {}, { env }));
+  const loaded = loadCheckpoint(setup.checkpointFile).checkpoint;
+  assert.deepEqual(env, SAFE_ENV);
+  assert.equal(loaded.writesConsumed, 0);
+  assert.equal(loaded.auditLog.length, 0);
+});
+
+function rewritePlanSnapshots(planFile, domains, snapshot) {
+  const plan = JSON.parse(fs.readFileSync(planFile, "utf8"));
+  for (const domain of domains) {
+    plan.items[0].domains[domain].snapshot = snapshot;
+  }
+  fs.writeFileSync(planFile, JSON.stringify(plan, null, 2));
+}
+
+function rewritePlanSnapshot(planFile, domain, snapshot) {
+  rewritePlanSnapshots(planFile, [domain], snapshot);
+}
+
+function resumePlan(setup, options = {}, dependencyOverrides = {}) {
+  return runMutableBatch({
+    mode: "PLAN",
+    resume: setup.checkpointFile,
+    planFile: setup.planFile,
+    persist: false,
+    ...options,
+  }, {
+    ...setup.dependencies,
+    ...dependencyOverrides,
+  });
+}
+
+async function createResumeFixtureDomains(domains, planExecution) {
   const enable = {
     enablePRICE: false,
     enableSTATUS: false,
     enableIMAGE: false,
     enableCREATE: false,
   };
-  enable[`enable${domain}`] = true;
-  const options = tempOptions({ mode: "PLAN", persist: true, maxWrites: 2, ...enable });
+  for (const domain of domains) enable[`enable${domain}`] = true;
+  const options = tempOptions({
+    mode: "PLAN",
+    persist: true,
+    maxWrites: 10,
+    ...enable,
+  });
   const dependencies = depsFor(planExecution);
   const report = await runMutableBatch(options, dependencies);
   const loaded = loadCheckpoint(report.checkpointFile);
   return {
     ...loaded,
     planFile: report.planFile,
-    item: findCheckpointItem(loaded.checkpoint, NORMALIZED_SKU, domain),
     dependencies,
+  };
+}
+
+async function createResumeFixture(domain, planExecution) {
+  const loaded = await createResumeFixtureDomains([domain], planExecution);
+  return {
+    ...loaded,
+    item: findCheckpointItem(loaded.checkpoint, NORMALIZED_SKU, domain),
   };
 }
 
