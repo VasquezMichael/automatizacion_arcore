@@ -118,6 +118,9 @@ function buildBatchItemResult(inputItem, execution) {
     supplierResolution: execution.supplierResolution || null,
     classification: execution.classification || null,
     availability: plan.supplier?.availability || null,
+    supplier: {
+      imageSourceType: plan.supplier?.imageSourceType || null,
+    },
     tiendanube: {
       matchCount: plan.tiendanube?.matchCount ?? null,
       legacyGroup: plan.tiendanube?.legacyGroup || null,

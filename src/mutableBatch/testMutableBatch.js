@@ -1552,6 +1552,19 @@ test("97. excepcion de validacion conserva gates y checkpoint seguros", async ()
   assert.equal(loaded.auditLog.length, 0);
 });
 
+test("98. PLAN autoBudget fija budget exacto desde el plan fresco", async () => {
+  const options = tempOptions({
+    mode: "PLAN",
+    autoBudget: true,
+    maxWrites: undefined,
+  });
+  const report = await runMutableBatch(options, depsFor(fakePlanExecution()));
+  assert.equal(report.plan.expectedWrites, 1);
+  assert.equal(report.plan.metadata.maxWrites, 1);
+  assert.equal(report.budget.maxWrites, 1);
+  assert.equal(report.budget.writesConsumed, 0);
+});
+
 function rewritePlanSnapshots(planFile, domains, snapshot) {
   const plan = JSON.parse(fs.readFileSync(planFile, "utf8"));
   for (const domain of domains) {

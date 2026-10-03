@@ -620,6 +620,12 @@ function createReport(plan, checkpoint, options = {}) {
 
 async function buildNewPlan(options, dependencies, runtime, codeVersion, mainVersion) {
   const mode = normalizeMode(options.mode);
+  if (options.autoBudget === true && mode !== "PLAN") {
+    throw new MutableBatchError(
+      "MUTABLE_AUTO_BUDGET_PLAN_ONLY",
+      "El budget automatico solo puede calcularse durante PLAN.",
+    );
+  }
   const domains = selectedDomains(options);
   if (domains.length === 0) {
     throw new MutableBatchError(
@@ -627,7 +633,9 @@ async function buildNewPlan(options, dependencies, runtime, codeVersion, mainVer
       "Debe habilitarse al menos un dominio de forma explicita.",
     );
   }
-  const maxWrites = normalizeMaxWrites(options.maxWrites, mode);
+  const requestedMaxWrites = options.autoBudget === true
+    ? null
+    : normalizeMaxWrites(options.maxWrites, mode);
   const allowlist = prepareAllowlist(options.skus, options.scopeFile);
   const identity = createMutableRunIdentity(options.now || new Date());
   const planSku = dependencies.planSku || defaultPlanSku;
@@ -636,6 +644,12 @@ async function buildNewPlan(options, dependencies, runtime, codeVersion, mainVer
     const execution = await planSku(allowItem.inputSku, runtime, allowItem);
     items.push(buildPlanItem(allowItem, execution, DOMAIN_ORDER));
   }
+  const expectedWrites = items.reduce(
+    (total, item) =>
+      total + domains.reduce((sum, domain) => sum + item.domains[domain].expectedWrites, 0),
+    0,
+  );
+  const maxWrites = options.autoBudget === true ? expectedWrites : requestedMaxWrites;
   const plan = {
     metadata: {
       runId: identity.runId,
@@ -659,11 +673,7 @@ async function buildNewPlan(options, dependencies, runtime, codeVersion, mainVer
         ...item.domains[domain],
       })),
     ),
-    expectedWrites: items.reduce(
-      (total, item) =>
-        total + domains.reduce((sum, domain) => sum + item.domains[domain].expectedWrites, 0),
-      0,
-    ),
+    expectedWrites,
     excludedItems: items.filter(
       (item) => item.classification === "MANUAL_REVIEW" || item.errors.length > 0,
     ).map((item) => ({
