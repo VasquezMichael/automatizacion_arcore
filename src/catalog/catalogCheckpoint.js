@@ -1,15 +1,10 @@
 const fs = require("fs");
 const path = require("path");
 const { sanitizeBatchOutput } = require("../batch/batchOutput");
+const { dataPath } = require("../config/dataDirectory");
 
 const CHECKPOINT_VERSION = 1;
-const CATALOG_CHECKPOINT_DIR = path.resolve(
-  __dirname,
-  "..",
-  "..",
-  "output",
-  "catalog-checkpoints",
-);
+const CATALOG_CHECKPOINT_DIR = dataPath("catalog-checkpoints");
 
 class CatalogCheckpointError extends Error {
   constructor(code, message, details) {

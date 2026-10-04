@@ -4,6 +4,7 @@ const { runClientScope } = require("../clientScope/clientScopeRunner");
 const { readExecutionGates } = require("../executor/executionGuards");
 const { runMutableBatch } = require("../mutableBatch/mutableBatchRunner");
 const { getTiendanubeConfig } = require("../tiendanube/client");
+const { dataPathFrom, resolveDataDir } = require("../config/dataDirectory");
 const { acquireProductionSyncLock } = require("./productionSyncLock");
 const { buildSafeProductionPlan } = require("./productionSyncPlanner");
 const {
@@ -89,6 +90,11 @@ function mutableOptions(subBatch, context, mode) {
     enableSTATUS: subBatch.domain === "STATUS",
     enableIMAGE: subBatch.domain === "IMAGE",
     enableCREATE: subBatch.domain === "CREATE",
+    ...(context.dataDir ? {
+      planOutputDir: dataPathFrom(context.dataDir, "mutable-batch-plans"),
+      checkpointOutputDir: dataPathFrom(context.dataDir, "mutable-batch-checkpoints"),
+      runOutputDir: dataPathFrom(context.dataDir, "mutable-batch"),
+    } : {}),
   };
 }
 
@@ -255,6 +261,7 @@ function finalizeReport(report, env, now = new Date()) {
 async function runProductionSync(options = {}, dependencies = {}) {
   const mode = normalizeMode(options.mode);
   const env = dependencies.env || process.env;
+  const dataDir = resolveDataDir(env, options.dataDir);
   if (mode === "EXECUTE") {
     assertProductionExecutionAuthorized({
       mode,
@@ -266,7 +273,7 @@ async function runProductionSync(options = {}, dependencies = {}) {
   const loadScope = dependencies.loadScope || loadClientScope;
   const loaded = loadScope(options.scopeFile);
   const identity = dependencies.identity || createProductionSyncIdentity(options.now || new Date());
-  const outputDir = options.outputDir;
+  const outputDir = options.outputDir || dataPathFrom(dataDir, "production-sync");
   const report = createBaseReport(
     identity,
     mode,
@@ -276,7 +283,7 @@ async function runProductionSync(options = {}, dependencies = {}) {
   );
   const acquireLock = dependencies.acquireLock || acquireProductionSyncLock;
   const lock = acquireLock({
-    filePath: options.lockFile,
+    filePath: options.lockFile || dataPathFrom(dataDir, "production-sync", "production-sync.lock"),
     staleMinutes: options.staleLockMinutes,
     runId: identity.runId,
     now: options.now,
@@ -320,6 +327,7 @@ async function runProductionSync(options = {}, dependencies = {}) {
         const result = await runSubBatch(planned, {
           mode,
           env,
+          dataDir,
           scopeFile: loaded.filePath,
           confirmRealWrites: options.confirmRealWrites,
         });

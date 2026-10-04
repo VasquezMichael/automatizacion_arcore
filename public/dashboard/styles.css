@@ -90,6 +90,8 @@ main { padding: 0 clamp(24px, 5vw, 72px) 56px; }
 .status-dot.degraded { background: var(--yellow); }
 
 .summary-grid { display: grid; grid-template-columns: repeat(9, minmax(110px, 1fr)); gap: 10px; padding: 22px 0 28px; }
+.runtime-section { padding: 22px 0 2px; border-bottom: 1px solid var(--border); }
+.runtime-grid { display: grid; grid-template-columns: repeat(8, minmax(110px, 1fr)); gap: 10px; padding-bottom: 22px; }
 .summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 14px; min-height: 88px; }
 .summary-card strong { display: block; font-size: 25px; line-height: 1; margin-bottom: 10px; font-variant-numeric: tabular-nums; }
 .summary-card span { color: var(--muted); font-size: 12px; line-height: 1.35; }
@@ -156,6 +158,7 @@ dialog::backdrop { background: rgba(18, 29, 39, .52); }
 
 @media (max-width: 1180px) {
   .summary-grid { grid-template-columns: repeat(5, minmax(120px, 1fr)); }
+  .runtime-grid { grid-template-columns: repeat(4, minmax(120px, 1fr)); }
   .activity-row { grid-template-columns: 150px minmax(220px, 1fr) 120px; }
   .activity-row > :last-child { display: none; }
 }
@@ -167,6 +170,7 @@ dialog::backdrop { background: rgba(18, 29, 39, .52); }
   .status-strip, .section-heading { align-items: stretch; flex-direction: column; justify-content: center; }
   .status-strip { padding: 12px 0; }
   .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .runtime-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .search-field input { width: 100%; }
   .activity-row { grid-template-columns: 1fr; gap: 4px; padding: 12px 0; }
   .activity-row > :last-child { display: block; }

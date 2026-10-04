@@ -2,14 +2,9 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { sanitizeBatchOutput } = require("../batch/batchOutput");
+const { dataPath } = require("../config/dataDirectory");
 
-const CLIENT_SCOPE_OUTPUT_DIR = path.resolve(
-  __dirname,
-  "..",
-  "..",
-  "output",
-  "client-scope",
-);
+const CLIENT_SCOPE_OUTPUT_DIR = dataPath("client-scope");
 
 function safeTimestamp(timestamp) {
   return timestamp.replace(/[:.]/g, "-");

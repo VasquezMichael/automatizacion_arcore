@@ -1,10 +1,19 @@
-const { loadClientScope } = require("../clientScope/clientScope");
-const { runClientScope } = require("../clientScope/clientScopeRunner");
 const {
   DEFAULT_OUTPUT_DIR,
   loadActivity,
   loadLatestClientScopeReport,
+  loadLatestProductionSyncReport,
 } = require("./reportService");
+
+function defaultLoadClientScope(...args) {
+  const { loadClientScope } = require("../clientScope/clientScope");
+  return loadClientScope(...args);
+}
+
+function defaultRunClientScope(...args) {
+  const { runClientScope } = require("../clientScope/clientScopeRunner");
+  return runClientScope(...args);
+}
 
 class DashboardError extends Error {
   constructor(code, message, status = 500) {
@@ -193,8 +202,9 @@ function assertReadOnlyReport(report) {
 class DashboardService {
   constructor(options = {}) {
     this.outputDir = options.outputDir || DEFAULT_OUTPUT_DIR;
-    this.runClientScope = options.runClientScope || runClientScope;
-    this.loadScope = options.loadScope || loadClientScope;
+    this.runClientScope = options.runClientScope || defaultRunClientScope;
+    this.loadScope = options.loadScope || defaultLoadClientScope;
+    this.runtimeStatusProvider = options.runtimeStatusProvider || (() => null);
     this.refreshPromise = null;
   }
 
@@ -219,6 +229,8 @@ class DashboardService {
     const report = this.latestReport();
     const products = (report?.items || []).map(mapProduct);
     const scopeSummary = report?.scopeSummary || this.loadScope().summary;
+    const productionReport = loadLatestProductionSyncReport(this.outputDir);
+    const scheduler = this.runtimeStatusProvider();
     return {
       generatedAt: new Date().toISOString(),
       lastAnalysisAt: report?.metadata?.completedAt || null,
@@ -253,6 +265,20 @@ class DashboardService {
             retries: report.metadata?.sourceMetrics?.sessionRetryCount ?? null,
           }
         : { status: "NO_DATA", contexts: null, reauthCount: null, retries: null },
+      productionRuntime: {
+        lastSync: productionReport
+          ? {
+              runId: productionReport.runId,
+              mode: productionReport.mode,
+              status: productionReport.stopped ? "STOPPED" : "COMPLETED",
+              completedAt: productionReport.finishedAt || null,
+              durationMs: productionReport.durationMs ?? null,
+              writes: productionReport.executedWrites || 0,
+              exceptions: productionReport.summary?.exceptions ?? null,
+            }
+          : null,
+        scheduler,
+      },
     };
   }
 
@@ -286,6 +312,8 @@ module.exports = {
   DashboardError,
   DashboardService,
   assertReadOnlyReport,
+  defaultLoadClientScope,
+  defaultRunClientScope,
   deriveUiStatus,
   mapProduct,
 };

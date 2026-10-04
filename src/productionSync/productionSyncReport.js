@@ -2,14 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const { sanitizeBatchOutput } = require("../batch/batchOutput");
 const { persistJsonAtomic } = require("../mutableBatch/mutableBatchOutput");
+const { dataPath } = require("../config/dataDirectory");
 
-const PRODUCTION_SYNC_OUTPUT_DIR = path.resolve(
-  __dirname,
-  "..",
-  "..",
-  "output",
-  "production-sync",
-);
+const PRODUCTION_SYNC_OUTPUT_DIR = dataPath("production-sync");
 
 function safeTimestamp(value) {
   return value.replace(/[:.]/g, "-");

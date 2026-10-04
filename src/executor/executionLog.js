@@ -2,8 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { normalizeSku } = require("../tiendanube/sku");
+const { dataPath } = require("../config/dataDirectory");
 
-const EXECUTIONS_DIR = path.resolve(__dirname, "..", "..", "output", "executions");
+const EXECUTIONS_DIR = dataPath("executions");
 const SENSITIVE_KEY = /(authorization|cookie|password|secret|storageState|token)/i;
 
 function safeTimestamp(timestamp) {

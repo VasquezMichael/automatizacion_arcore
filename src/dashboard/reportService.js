@@ -1,7 +1,8 @@
 const fs = require("fs");
 const path = require("path");
+const { resolveDataDir } = require("../config/dataDirectory");
 
-const DEFAULT_OUTPUT_DIR = path.resolve(__dirname, "..", "..", "output");
+const DEFAULT_OUTPUT_DIR = resolveDataDir();
 
 function listJsonFiles(directory) {
   if (!fs.existsSync(directory)) return [];
@@ -92,15 +93,45 @@ function activityFromBatch(report) {
   };
 }
 
+function activityFromProductionSync(report) {
+  if (!report?.runId || !report.mode || !report.startedAt) return null;
+  const writes = Number(report.executedWrites || 0);
+  return {
+    id: report.runId,
+    date: report.finishedAt || report.startedAt,
+    type: `Runtime productivo ${report.mode}`,
+    result: report.stopped ? "DETENIDO" : report.mode === "EXECUTE" ? "COMPLETADO" : "PLANIFICADO",
+    processed: report.scopeCount || 0,
+    writes,
+    status: report.stopped
+      ? report.stopReason?.code || "Ejecucion detenida"
+      : `${report.autoExecutable || 0} automaticos, ${writes} writes`,
+  };
+}
+
+function loadLatestProductionSyncReport(outputDir = DEFAULT_OUTPUT_DIR) {
+  const files = listJsonFiles(path.join(outputDir, "production-sync"))
+    .filter((file) => !file.filePath.endsWith(".checkpoint.json"));
+  for (const file of files) {
+    const report = readJsonSafe(file.filePath);
+    if (report?.runId && report?.mode && report?.security) return report;
+  }
+  return null;
+}
+
 function loadActivity(outputDir = DEFAULT_OUTPUT_DIR, limit = 12) {
   const sources = [
     { directory: "client-scope", parse: activityFromClientScope },
     { directory: "mutable-batch", parse: activityFromMutableBatch },
     { directory: "batches", parse: activityFromBatch },
+    { directory: "production-sync", parse: activityFromProductionSync },
   ];
   const events = [];
   for (const source of sources) {
-    for (const file of listJsonFiles(path.join(outputDir, source.directory))) {
+    const files = listJsonFiles(path.join(outputDir, source.directory))
+      .filter((file) => source.directory !== "production-sync" ||
+        !file.filePath.endsWith(".checkpoint.json"));
+    for (const file of files) {
       const report = readJsonSafe(file.filePath);
       const event = source.parse(report);
       if (event?.date) events.push(event);
@@ -116,8 +147,10 @@ module.exports = {
   activityFromBatch,
   activityFromClientScope,
   activityFromMutableBatch,
+  activityFromProductionSync,
   listJsonFiles,
   loadActivity,
   loadLatestClientScopeReport,
+  loadLatestProductionSyncReport,
   readJsonSafe,
 };

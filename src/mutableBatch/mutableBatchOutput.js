@@ -2,8 +2,9 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { sanitizeBatchOutput } = require("../batch/batchOutput");
+const { dataPath } = require("../config/dataDirectory");
 
-const ROOT_OUTPUT_DIR = path.resolve(__dirname, "..", "..", "output");
+const ROOT_OUTPUT_DIR = dataPath();
 const MUTABLE_PLAN_DIR = path.join(ROOT_OUTPUT_DIR, "mutable-batch-plans");
 const MUTABLE_RUN_DIR = path.join(ROOT_OUTPUT_DIR, "mutable-batch");
 

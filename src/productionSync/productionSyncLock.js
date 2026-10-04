@@ -1,15 +1,9 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { dataPath } = require("../config/dataDirectory");
 
-const DEFAULT_LOCK_FILE = path.resolve(
-  __dirname,
-  "..",
-  "..",
-  "output",
-  "production-sync",
-  "production-sync.lock",
-);
+const DEFAULT_LOCK_FILE = dataPath("production-sync", "production-sync.lock");
 const DEFAULT_STALE_MINUTES = 120;
 
 class ProductionSyncLockError extends Error {

@@ -1,15 +1,10 @@
 const fs = require("fs");
 const path = require("path");
 const { persistJsonAtomic } = require("./mutableBatchOutput");
+const { dataPath } = require("../config/dataDirectory");
 
 const CHECKPOINT_VERSION = 1;
-const MUTABLE_CHECKPOINT_DIR = path.resolve(
-  __dirname,
-  "..",
-  "..",
-  "output",
-  "mutable-batch-checkpoints",
-);
+const MUTABLE_CHECKPOINT_DIR = dataPath("mutable-batch-checkpoints");
 
 class MutableCheckpointError extends Error {
   constructor(code, message, details) {

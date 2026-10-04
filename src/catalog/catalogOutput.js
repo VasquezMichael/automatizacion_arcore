@@ -2,8 +2,9 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { sanitizeBatchOutput } = require("../batch/batchOutput");
+const { dataPath } = require("../config/dataDirectory");
 
-const CATALOG_RUNS_DIR = path.resolve(__dirname, "..", "..", "output", "catalog-runs");
+const CATALOG_RUNS_DIR = dataPath("catalog-runs");
 
 function createCatalogIdentity(now = new Date()) {
   const timestamp = now.toISOString();

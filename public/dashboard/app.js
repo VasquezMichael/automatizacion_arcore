@@ -18,6 +18,7 @@ const elements = {
   sessionDot: document.querySelector("#session-dot"),
   sessionLabel: document.querySelector("#session-label"),
   lastAnalysis: document.querySelector("#last-analysis"),
+  runtime: document.querySelector("#runtime-grid"),
   dialog: document.querySelector("#product-dialog"),
   detailSku: document.querySelector("#detail-sku"),
   detailTitle: document.querySelector("#detail-title"),
@@ -101,6 +102,24 @@ function renderSummary() {
     ? "Análisis disponible · sesión estable"
     : session?.status === "DEGRADED" ? "Análisis disponible con observaciones" : "Sin análisis disponible";
   elements.lastAnalysis.textContent = `Último análisis: ${formatDate(dashboard?.lastAnalysisAt)}`;
+}
+
+function renderProductionRuntime() {
+  const runtime = state.dashboard?.productionRuntime || {};
+  const sync = runtime.lastSync || {};
+  const scheduler = runtime.scheduler || {};
+  const metadata = scheduler.metadata || {};
+  const values = [
+    [sync.completedAt ? formatDate(sync.completedAt) : "Sin ejecuciones", "Ultima sincronizacion"],
+    [sync.mode || scheduler.mode || "PLAN", "Modo"],
+    [sync.status || "SIN DATOS", "Resultado"],
+    [sync.durationMs == null ? "-" : `${Math.round(sync.durationMs / 1000)} s`, "Duracion"],
+    [sync.writes ?? 0, "Writes verificados"],
+    [sync.exceptions ?? 0, "Excepciones"],
+    [scheduler.state || "DISABLED", "Scheduler"],
+    [metadata.nextRunAt ? formatDate(metadata.nextRunAt) : "No programada", "Proxima ejecucion"],
+  ];
+  elements.runtime.replaceChildren(...values.map(([value, label]) => createSummaryCard(value, label)));
 }
 
 function cell(content, className = "") {
@@ -302,6 +321,7 @@ async function loadDashboard() {
   state.products = (await productsResponse.json()).products;
   state.activity = (await activityResponse.json()).activity;
   renderSummary();
+  renderProductionRuntime();
   renderProducts();
   renderActivity();
 }
@@ -349,6 +369,7 @@ elements.dialog.addEventListener("click", (event) => {
 loadDashboard().catch(() => {
   showToast("No se pudo cargar el dashboard.", true);
   renderSummary();
+  renderProductionRuntime();
   renderProducts();
   renderActivity();
 });

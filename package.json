@@ -46,6 +46,8 @@
     "mutable-batch:test": "node src/mutableBatch/testMutableBatch.js",
     "dashboard": "node src/dashboard/server.js",
     "dashboard:test": "node src/dashboard/testDashboard.js",
+    "start:production": "node src/production/productionServer.js",
+    "production-deployment:test": "node src/production/testProductionDeployment.js",
     "sync:production": "node src/productionSync/productionSyncCli.js",
     "production-sync:test": "node src/productionSync/testProductionSync.js",
     "sync:prepare": "node src/syncPrepare.js",

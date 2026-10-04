@@ -2,8 +2,9 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { sanitizeForPersistence } = require("../executor/executionLog");
+const { dataPath } = require("../config/dataDirectory");
 
-const BATCH_OUTPUT_DIR = path.resolve(__dirname, "..", "..", "output", "batches");
+const BATCH_OUTPUT_DIR = dataPath("batches");
 
 function safeTimestamp(timestamp) {
   return timestamp.replace(/[:.]/g, "-");
