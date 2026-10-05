@@ -15,7 +15,6 @@ RUN mkdir -p /app/data && chown -R pwuser:pwuser /app/data
 
 USER pwuser
 
-VOLUME ["/app/data"]
 EXPOSE 3000
 
 CMD ["node", "src/production/productionServer.js"]
