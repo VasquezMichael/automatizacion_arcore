@@ -49,6 +49,7 @@
     "dashboard:test": "node src/dashboard/testDashboard.js",
     "start:production": "node src/production/productionServer.js",
     "production-deployment:test": "node src/production/testProductionDeployment.js",
+    "runtime-version:test": "node src/config/testRuntimeVersion.js",
     "sync:production": "node src/productionSync/productionSyncCli.js",
     "production-sync:test": "node src/productionSync/testProductionSync.js",
     "sync:prepare": "node src/syncPrepare.js",

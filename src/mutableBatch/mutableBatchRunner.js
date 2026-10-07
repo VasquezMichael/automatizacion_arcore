@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { execFileSync } = require("child_process");
+const { resolveRuntimeVersion } = require("../config/runtimeVersion");
 const { ensureAuthenticatedSession } = require("../extractByCodesTest");
 const { ArcoreCatalogSource } = require("../catalog/arcoreCatalogSource");
 const { executeSyncPlan } = require("../executor/executeSyncPlan");
@@ -75,18 +75,18 @@ class MutableBatchError extends Error {
   }
 }
 
-function currentCodeVersion() {
-  return execFileSync("git", ["rev-parse", "HEAD"], {
-    cwd: path.resolve(__dirname, "..", ".."),
-    encoding: "utf8",
-  }).trim();
-}
+function runtimeVersionFor(dependencies, env, getterName, gitRef) {
+  if (dependencies[getterName]) {
+    return {
+      commitSha: dependencies[getterName](),
+      source: "DEPENDENCY",
+      railwayBranch: env.RAILWAY_GIT_BRANCH || null,
+      railwayDeploymentId: env.RAILWAY_DEPLOYMENT_ID || null,
+    };
+  }
 
-function currentMainVersion() {
-  return execFileSync("git", ["rev-parse", "main"], {
-    cwd: path.resolve(__dirname, "..", ".."),
-    encoding: "utf8",
-  }).trim();
+  const resolver = dependencies.resolveRuntimeVersion || resolveRuntimeVersion;
+  return resolver({ env, gitRef, runGit: dependencies.runGit });
 }
 
 function normalizeMode(mode) {
@@ -618,7 +618,14 @@ function createReport(plan, checkpoint, options = {}) {
   };
 }
 
-async function buildNewPlan(options, dependencies, runtime, codeVersion, mainVersion) {
+async function buildNewPlan(
+  options,
+  dependencies,
+  runtime,
+  codeVersion,
+  mainVersion,
+  runtimeVersion,
+) {
   const mode = normalizeMode(options.mode);
   if (options.autoBudget === true && mode !== "PLAN") {
     throw new MutableBatchError(
@@ -657,6 +664,7 @@ async function buildNewPlan(options, dependencies, runtime, codeVersion, mainVer
       mode,
       mainSha: mainVersion,
       codeVersion,
+      runtimeVersion,
       scopeFile: allowlist.loaded.filePath,
       allowlist: allowlist.items.map((item) => item.normalizedSku),
       domains,
@@ -817,8 +825,16 @@ async function loadResume(options, dependencies, codeVersion) {
 
 async function runMutableBatch(options = {}, dependencies = {}) {
   const mode = normalizeMode(options.mode || (options.resume ? "EXECUTE" : "PLAN"));
-  const codeVersion = (dependencies.getCodeVersion || currentCodeVersion)();
-  const mainVersion = (dependencies.getMainVersion || currentMainVersion)();
+  const env = dependencies.env || options.env || process.env;
+  const runtimeVersion = runtimeVersionFor(dependencies, env, "getCodeVersion", "HEAD");
+  const mainRuntimeVersion = runtimeVersionFor(
+    dependencies,
+    env,
+    "getMainVersion",
+    "main",
+  );
+  const codeVersion = runtimeVersion.commitSha;
+  const mainVersion = mainRuntimeVersion.commitSha;
   const openRuntime = dependencies.openRuntime || openDefaultRuntime;
   let runtime = null;
   let state;
@@ -834,6 +850,7 @@ async function runMutableBatch(options = {}, dependencies = {}) {
           runtime,
           codeVersion,
           mainVersion,
+          runtimeVersion,
         );
     const domains = state.plan.metadata.domains;
 

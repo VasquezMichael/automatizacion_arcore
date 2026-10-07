@@ -18,6 +18,7 @@ const {
   assertProductionExecutionAuthorized,
   runProductionSync,
 } = require("./productionSyncRunner");
+const { runMutableBatch } = require("../mutableBatch/mutableBatchRunner");
 
 const SAFE_ENV = {
   TIENDANUBE_DRY_RUN: "true",
@@ -132,6 +133,81 @@ function runnerFixture(items, overrides = {}) {
       ...overrides.dependencies,
     },
     root,
+  };
+}
+
+function mutableStatusExecution(item) {
+  const match = {
+    productId: 1001,
+    variantId: 2001,
+    sku: item.normalizedSku,
+    published: true,
+  };
+  const originalPlan = {
+    sourceSku: item.inputSku,
+    normalizedSku: item.normalizedSku,
+    matchedCode: item.normalizedSku,
+    supplierResolution: { type: "EXACT" },
+    classification: "SINGLE",
+    supplier: {
+      codigo: item.normalizedSku,
+      availability: "UNAVAILABLE",
+      supplierPrice: null,
+      imageSourceType: null,
+    },
+    tiendanube: {
+      matchCount: 1,
+      productIds: [match.productId],
+      variantIds: [match.variantId],
+      matches: [match],
+      legacyGroup: null,
+    },
+    plans: {
+      status: {
+        action: "UNPUBLISH",
+        desiredPublished: false,
+        publications: [{
+          ...match,
+          action: "UNPUBLISH",
+          desiredPublished: false,
+        }],
+      },
+      price: {
+        action: "PRICE_NO_CHANGE",
+        calculation: null,
+        publications: [],
+      },
+      image: {
+        action: "NO_SOURCE_IMAGE",
+        sourceImageUrl: null,
+        sourceHash: null,
+        publications: [],
+      },
+      create: null,
+    },
+    warnings: [],
+    errors: [],
+  };
+
+  return {
+    normalizedSku: item.normalizedSku,
+    matchedCode: item.normalizedSku,
+    supplierResolution: originalPlan.supplierResolution,
+    classification: "SINGLE",
+    originalPlan,
+    revalidation: { status: "PASSED", ok: true },
+    executionPlan: {
+      actions: [{
+        type: "STATUS",
+        productId: match.productId,
+        variantId: match.variantId,
+        plannedAction: "UNPUBLISH",
+        simulationResult: "WOULD_UPDATE",
+      }],
+    },
+    result: { executionStatus: "SIMULATED", writeAttempted: false },
+    warnings: [],
+    errors: [],
   };
 }
 
@@ -436,6 +512,62 @@ test("26. IMAGE con source type no aprobado se excluye por dominio", () => {
   assert.equal(plan.domainExclusions.IMAGE.length, 1);
   assert.equal(plan.subBatches.some((item) => item.domain === "IMAGE"), false);
   assert.equal(plan.subBatches.some((item) => item.domain === "PRICE"), true);
+});
+
+test("27. production sync PLAN completa sin repositorio git", async () => {
+  const item = makeItem({
+    inputSku: "415 0768 09",
+    normalizedSku: "415076809",
+    availability: "UNAVAILABLE",
+    statusAction: "UNPUBLISH",
+  });
+  const fixture = runnerFixture([item]);
+  let mutableMetadata;
+
+  fixture.dependencies.runSubBatch = async (subBatch) => {
+    const root = tempRoot("production-sync-mutable-");
+    const mutableReport = await runMutableBatch({
+      mode: "PLAN",
+      autoBudget: true,
+      skus: subBatch.skus,
+      enableSTATUS: true,
+      persist: false,
+      checkpointFile: path.join(root, "checkpoint.json"),
+    }, {
+      env: { ...SAFE_ENV },
+      runGit: () => {
+        throw new Error("fatal: not a git repository");
+      },
+      openRuntime: async () => ({
+        metrics: { contextsOpened: 0 },
+        async close() {},
+      }),
+      planSku: async () => mutableStatusExecution(item),
+    });
+
+    mutableMetadata = mutableReport.plan.metadata;
+    return {
+      phase: "PLAN",
+      runId: mutableReport.metadata.runId,
+      planExpectedWrites: mutableReport.plan.expectedWrites,
+      budgetMaxWrites: mutableReport.budget.maxWrites,
+      consumedWrites: mutableReport.budget.writesConsumed,
+      remainingWrites: mutableReport.budget.writesRemaining,
+      writeAttempted: mutableReport.writes.length,
+      stopped: mutableReport.stopped,
+      stopReason: mutableReport.stopReason,
+      sessionMetrics: mutableReport.sessionMetrics,
+    };
+  };
+
+  const report = await runProductionSync(fixture.options, fixture.dependencies);
+  assert.equal(report.stopped, false, JSON.stringify(report.stopReason));
+  assert.equal(report.plannedWrites, 1);
+  assert.equal(report.executedWrites, 0);
+  assert.equal(report.writeAttempted, 0);
+  assert.equal(mutableMetadata.codeVersion, null);
+  assert.equal(mutableMetadata.mainSha, null);
+  assert.equal(mutableMetadata.runtimeVersion.source, "UNAVAILABLE");
 });
 
 async function main() {

@@ -1565,6 +1565,77 @@ test("98. PLAN autoBudget fija budget exacto desde el plan fresco", async () => 
   assert.equal(report.budget.writesConsumed, 0);
 });
 
+test("99. Railway usa metadata de entorno sin invocar git", async () => {
+  let gitCalls = 0;
+  const report = await runMutableBatch(
+    tempOptions({
+      mode: "PLAN",
+      autoBudget: true,
+      maxWrites: undefined,
+    }),
+    depsFor(fakePlanExecution(), null, {
+      getCodeVersion: undefined,
+      getMainVersion: undefined,
+      env: {
+        ...SAFE_ENV,
+        RAILWAY_GIT_COMMIT_SHA: "railway-test-sha",
+        RAILWAY_GIT_BRANCH: "main",
+        RAILWAY_DEPLOYMENT_ID: "deployment-test",
+      },
+      runGit: () => {
+        gitCalls += 1;
+        throw new Error("git no debe ejecutarse con metadata Railway");
+      },
+    }),
+  );
+
+  assert.equal(gitCalls, 0);
+  assert.equal(report.plan.metadata.codeVersion, "railway-test-sha");
+  assert.equal(report.plan.metadata.mainSha, "railway-test-sha");
+  assert.deepEqual(report.plan.metadata.runtimeVersion, {
+    commitSha: "railway-test-sha",
+    source: "RAILWAY_GIT_COMMIT_SHA",
+    railwayBranch: "main",
+    railwayDeploymentId: "deployment-test",
+  });
+  assert.equal(report.stopped, false);
+  assert.equal(report.writes.length, 0);
+  assert.equal(report.budget.writesConsumed, 0);
+});
+
+test("100. PLAN sin metadata Git conserva commit nulo y no se detiene", async () => {
+  let gitCalls = 0;
+  const report = await runMutableBatch(
+    tempOptions({
+      mode: "PLAN",
+      autoBudget: true,
+      maxWrites: undefined,
+    }),
+    depsFor(fakePlanExecution(), null, {
+      getCodeVersion: undefined,
+      getMainVersion: undefined,
+      env: { ...SAFE_ENV },
+      runGit: () => {
+        gitCalls += 1;
+        throw new Error("fatal: not a git repository");
+      },
+    }),
+  );
+
+  assert.equal(gitCalls, 2);
+  assert.equal(report.plan.metadata.codeVersion, null);
+  assert.equal(report.plan.metadata.mainSha, null);
+  assert.deepEqual(report.plan.metadata.runtimeVersion, {
+    commitSha: null,
+    source: "UNAVAILABLE",
+    railwayBranch: null,
+    railwayDeploymentId: null,
+  });
+  assert.equal(report.stopped, false);
+  assert.equal(report.writes.length, 0);
+  assert.equal(report.budget.writesConsumed, 0);
+});
+
 function rewritePlanSnapshots(planFile, domains, snapshot) {
   const plan = JSON.parse(fs.readFileSync(planFile, "utf8"));
   for (const domain of domains) {
