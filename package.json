@@ -38,6 +38,7 @@
     "sync:batch": "node src/batch/batchCli.js",
     "catalog:test": "node src/catalog/testCatalogRunner.js",
     "arcore:test-batch-session": "node src/catalog/testArcoreBatchSession.js",
+    "arcore:test-production-login": "node src/production/testArcoreProductionLogin.js",
     "catalog:scan": "node src/catalog/catalogCli.js --mode SCAN_ONLY",
     "catalog:plan": "node src/catalog/catalogCli.js --mode PLAN_BATCH",
     "client-scope:test": "node src/clientScope/testClientScope.js",

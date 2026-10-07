@@ -19,8 +19,13 @@ del scheduler. Su valor local por defecto es `./output`.
 
 En produccion, `DATA_DIR` debe apuntar a un volumen o disco persistente. Si se
 usa un filesystem efimero se perderan checkpoints, historial y metadata tras
-un reinicio. La imagen Docker declara `/app/data` como volumen y usa ese path
-por defecto.
+un reinicio. La imagen Docker usa `/app/data` por defecto y el volumen debe
+configurarse y montarse desde la plataforma de despliegue.
+
+La sesion autenticada de Arcore se guarda en
+`DATA_DIR/arcore/storageState.json` cuando `NODE_ENV=production`, por lo que
+tambien sobrevive reinicios si `DATA_DIR` es persistente. En desarrollo local
+se mantiene el archivo `storageState.json` en la raiz del proyecto.
 
 Al iniciar, el proceso valida que `DATA_DIR` exista o pueda crearse y que sea
 escribible. El path efectivo se registra sin incluir secretos.
@@ -54,6 +59,18 @@ PRODUCTION_SYNC_MODE=PLAN
 
 Los jobs no se solapan. Los errores se registran y persisten sin detener el
 servidor. La metadata vive en `DATA_DIR/scheduler/metadata.json`.
+
+## Login Arcore
+
+En produccion y entornos cloud sin interfaz grafica mantener:
+
+```text
+ARCORE_BROWSER_HEADLESS=true
+```
+
+Si la variable no esta definida, `NODE_ENV=production` activa headless por
+defecto. Para depuracion local con navegador visible puede configurarse
+`ARCORE_BROWSER_HEADLESS=false`.
 
 ## Cierre ordenado
 

@@ -1,25 +1,33 @@
 const fs = require("fs");
-const path = require("path");
+const { resolveArcoreStorageStateFile } = require("./config/arcoreRuntime");
 
-const STORAGE_STATE_FILE = path.resolve(__dirname, "..", "storageState.json");
-
-function storageStateExists() {
-  return fs.existsSync(STORAGE_STATE_FILE);
+function getStorageStateFile(options = {}) {
+  return options.storageStateFile || resolveArcoreStorageStateFile(options.env);
 }
 
-function loadStorageState() {
-  if (!storageStateExists()) {
+function storageStateExists(options = {}) {
+  return fs.existsSync(getStorageStateFile(options));
+}
+
+function loadStorageState(options = {}) {
+  const storageStateFile = getStorageStateFile(options);
+  if (!storageStateExists(options)) {
     throw new Error(
       "No existe storageState.json. Ejecuta npm run login primero.",
     );
   }
 
-  const raw = fs.readFileSync(STORAGE_STATE_FILE, "utf-8");
+  const raw = fs.readFileSync(storageStateFile, "utf-8");
   return JSON.parse(raw);
 }
 
 module.exports = {
-  STORAGE_STATE_FILE,
-  storageStateExists,
+  getStorageStateFile,
   loadStorageState,
+  storageStateExists,
 };
+
+Object.defineProperty(module.exports, "STORAGE_STATE_FILE", {
+  enumerable: true,
+  get: () => getStorageStateFile(),
+});
