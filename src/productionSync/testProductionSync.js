@@ -19,6 +19,11 @@ const {
   runProductionSync,
 } = require("./productionSyncRunner");
 const { runMutableBatch } = require("../mutableBatch/mutableBatchRunner");
+const { persistClientScopeReport } = require("../clientScope/clientScopeOutput");
+const { DashboardService } = require("../dashboard/dashboardService");
+const { createDashboardApp } = require("../dashboard/server");
+const { loadLatestClientScopeReport } = require("../dashboard/reportService");
+const { ProductionScheduler } = require("../production/productionScheduler");
 
 const SAFE_ENV = {
   TIENDANUBE_DRY_RUN: "true",
@@ -80,9 +85,41 @@ function makeItem(overrides = {}) {
   };
 }
 
-function analysis(items) {
+function analysis(items, overrides = {}) {
+  const classifications = {};
+  const availabilitySummary = {};
+  for (const item of items) {
+    classifications[item.classification] = (classifications[item.classification] || 0) + 1;
+    availabilitySummary[item.availability] = (availabilitySummary[item.availability] || 0) + 1;
+  }
   return {
-    metadata: { sourceMetrics: { contextsOpened: 1 } },
+    metadata: {
+      runId: overrides.runId || "production-analysis-test",
+      startedAt: "2026-10-07T10:00:00.000Z",
+      completedAt: "2026-10-07T10:01:00.000Z",
+      mode: "READ_ONLY",
+      writesAllowed: false,
+      sourceMetrics: { contextsOpened: 1 },
+    },
+    scopeSummary: { uniqueSkuCount: items.length },
+    batchSummary: {
+      processedCount: items.length,
+      succeededCount: items.filter((item) => item.status === "SUCCEEDED").length,
+      failedCount: items.filter((item) => item.status === "FAILED").length,
+      blockedCount: items.filter((item) => item.status === "BLOCKED").length,
+      manualReviewCount: items.filter((item) => item.requiresManualReview).length,
+      classifications,
+    },
+    availabilitySummary,
+    plannedActions: { status: {}, price: {}, image: {}, create: {} },
+    security: {
+      globalWriteRequested: false,
+      createWriteRequested: false,
+      priceWriteRequested: false,
+      statusWriteRequested: false,
+      imageWriteRequested: false,
+      writeAttempted: 0,
+    },
     items,
   };
 }
@@ -121,6 +158,7 @@ function runnerFixture(items, overrides = {}) {
     options: {
       mode: "PLAN",
       persist: false,
+      dataDir: root,
       lockFile: path.join(root, "sync.lock"),
       ...overrides.options,
     },
@@ -134,6 +172,19 @@ function runnerFixture(items, overrides = {}) {
     },
     root,
   };
+}
+
+async function withDashboardServer(service, run) {
+  const server = createDashboardApp({ service }).listen(0, "127.0.0.1");
+  await new Promise((resolve) => server.once("listening", resolve));
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  try {
+    await run(baseUrl);
+  } finally {
+    await new Promise((resolve, reject) =>
+      server.close((error) => error ? reject(error) : resolve()),
+    );
+  }
 }
 
 function mutableStatusExecution(item) {
@@ -568,6 +619,143 @@ test("27. production sync PLAN completa sin repositorio git", async () => {
   assert.equal(mutableMetadata.codeVersion, null);
   assert.equal(mutableMetadata.mainSha, null);
   assert.equal(mutableMetadata.runtimeVersion.source, "UNAVAILABLE");
+});
+
+test("28. production sync persiste el mismo analisis que consume dashboard", async () => {
+  const items = Array.from({ length: 85 }, (_, index) => makeItem({ index: index + 1 }));
+  const fixture = runnerFixture(items, { options: { persist: true } });
+  let analysisCalls = 0;
+  fixture.dependencies.runFreshAnalysis = async () => {
+    analysisCalls += 1;
+    return analysis(items, { runId: "scheduler-plan-analysis" });
+  };
+
+  const scheduler = new ProductionScheduler({
+    config: {
+      enabled: true,
+      intervalMinutes: 60,
+      mode: "PLAN",
+      executionConfirmed: false,
+      blocked: false,
+      blockedReasons: [],
+    },
+    dataDir: fixture.root,
+    env: SAFE_ENV,
+    logger: { info() {}, warn() {}, error() {} },
+    setTimer: () => ({ unref() {} }),
+    clearTimer() {},
+    runSync: (options, dependencies) => runProductionSync(
+      { ...fixture.options, ...options },
+      { ...fixture.dependencies, ...dependencies },
+    ),
+  });
+  scheduler.start();
+  const scheduled = await scheduler.runNow();
+  const report = scheduled.report;
+  assert.equal(scheduled.status, "COMPLETED");
+  assert.equal(analysisCalls, 1);
+  assert.equal(report.stopped, false);
+  assert.equal(report.scopeCount, 85);
+  assert.equal(report.writeAttempted, 0);
+  assert.equal(report.executedWrites, 0);
+  assert.equal(report.analysisReport.runId, "scheduler-plan-analysis");
+  assert.equal(report.analysisReport.itemCount, 85);
+  assert.equal(
+    path.dirname(report.analysisReport.outputFile),
+    path.join(fixture.root, "client-scope"),
+  );
+  assert.equal(fs.existsSync(report.analysisReport.outputFile), true);
+
+  const persisted = loadLatestClientScopeReport(fixture.root);
+  assert.equal(persisted.metadata.runId, "scheduler-plan-analysis");
+  assert.equal(persisted.items.length, 85);
+
+  const service = new DashboardService({
+    outputDir: fixture.root,
+    runtimeStatusProvider: () => scheduler.status(),
+  });
+  await withDashboardServer(service, async (baseUrl) => {
+    const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`);
+    const dashboard = await dashboardResponse.json();
+    const productsResponse = await fetch(`${baseUrl}/api/products`);
+    const products = await productsResponse.json();
+
+    assert.equal(dashboardResponse.status, 200);
+    assert.equal(productsResponse.status, 200);
+    assert.equal(dashboard.hasReport, true);
+    assert.equal(dashboard.scopeSummary.clientSkus, 85);
+    assert.equal(dashboard.scopeSummary.resolvedInArcore, 85);
+    assert.equal(dashboard.scopeSummary.existingInTiendanube, 85);
+    assert.equal(dashboard.availabilitySummary.available, 85);
+    assert.equal(products.products.length, 85);
+    assert.equal(dashboard.productionRuntime.lastSync.status, "COMPLETED");
+    assert.equal(dashboard.productionRuntime.scheduler.metadata.lastRunId, report.runId);
+  });
+});
+
+test("29. STOP posterior al analisis conserva el client-scope valido", async () => {
+  const item = makeItem({ priceAction: "PRICE_UPDATE" });
+  const fixture = runnerFixture([item], {
+    options: { persist: true },
+    dependencies: {
+      runFreshAnalysis: async () => analysis([item], { runId: "partial-safe-analysis" }),
+      runSubBatch: async (subBatch) => completedSubBatch(subBatch, {
+        stopped: true,
+        stopReason: { code: "CONTROLLED_STOP", message: "stop" },
+      }),
+    },
+  });
+
+  const report = await runProductionSync(fixture.options, fixture.dependencies);
+  const persisted = loadLatestClientScopeReport(fixture.root);
+  assert.equal(report.stopped, true);
+  assert.equal(report.stopReason.code, "CONTROLLED_STOP");
+  assert.equal(persisted.metadata.runId, "partial-safe-analysis");
+  assert.equal(persisted.items.length, 1);
+  assert.equal(report.writeAttempted, 0);
+});
+
+test("30. fallo de planning posterior conserva el client-scope valido", async () => {
+  const item = makeItem();
+  const fixture = runnerFixture([item], {
+    options: { persist: true },
+    dependencies: {
+      runFreshAnalysis: async () => analysis([item], { runId: "planning-stop-analysis" }),
+      buildPlan: () => {
+        throw new Error("planning failed after analysis");
+      },
+    },
+  });
+
+  const report = await runProductionSync(fixture.options, fixture.dependencies);
+  const persisted = loadLatestClientScopeReport(fixture.root);
+  assert.equal(report.stopped, true);
+  assert.equal(persisted.metadata.runId, "planning-stop-analysis");
+  assert.equal(persisted.items.length, 1);
+  assert.equal(report.writeAttempted, 0);
+});
+
+test("31. fallo previo al fresh analysis no reemplaza el ultimo reporte", async () => {
+  const item = makeItem();
+  const fixture = runnerFixture([item], { options: { persist: true } });
+  const clientScopeDir = path.join(fixture.root, "client-scope");
+  persistClientScopeReport(
+    analysis([item], { runId: "last-valid-analysis" }),
+    clientScopeDir,
+  );
+  const before = fs.readdirSync(clientScopeDir).sort();
+  fixture.dependencies.runFreshAnalysis = async () => {
+    throw new Error("analysis failed before completion");
+  };
+
+  const report = await runProductionSync(fixture.options, fixture.dependencies);
+  const after = fs.readdirSync(clientScopeDir).sort();
+  const persisted = loadLatestClientScopeReport(fixture.root);
+  assert.equal(report.stopped, true);
+  assert.equal(report.analysisReport, null);
+  assert.deepEqual(after, before);
+  assert.equal(persisted.metadata.runId, "last-valid-analysis");
+  assert.equal(report.writeAttempted, 0);
 });
 
 async function main() {

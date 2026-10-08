@@ -1,5 +1,6 @@
 const { ensureAuthenticatedSession } = require("../extractByCodesTest");
 const { loadClientScope } = require("../clientScope/clientScope");
+const { persistClientScopeReport } = require("../clientScope/clientScopeOutput");
 const { runClientScope } = require("../clientScope/clientScopeRunner");
 const { readExecutionGates } = require("../executor/executionGuards");
 const { runMutableBatch } = require("../mutableBatch/mutableBatchRunner");
@@ -197,6 +198,7 @@ function createBaseReport(identity, mode, scopeCount, env, outputDir) {
     stopped: false,
     stopReason: null,
     healthCheck: null,
+    analysisReport: null,
     sessionMetrics: { analysis: null, subBatches: [] },
     security: {
       initialGates: readExecutionGates(env),
@@ -292,6 +294,7 @@ async function runProductionSync(options = {}, dependencies = {}) {
   const persistReport = dependencies.persistReport || persistProductionSyncReport;
   const runHealthCheck = dependencies.runHealthCheck || defaultHealthCheck;
   const runFreshAnalysis = dependencies.runFreshAnalysis || defaultFreshAnalysis;
+  const persistFreshAnalysis = dependencies.persistFreshAnalysis || persistClientScopeReport;
   const buildPlan = dependencies.buildPlan || buildSafeProductionPlan;
   const runSubBatch = dependencies.runSubBatch || defaultRunSubBatch;
 
@@ -303,6 +306,18 @@ async function runProductionSync(options = {}, dependencies = {}) {
       mode: "READ_ONLY",
     });
     report.sessionMetrics.analysis = analysis.metadata?.sourceMetrics || null;
+    report.analysisReport = {
+      runId: analysis.metadata?.runId || null,
+      completedAt: analysis.metadata?.completedAt || null,
+      itemCount: Array.isArray(analysis.items) ? analysis.items.length : 0,
+      outputFile: null,
+    };
+    if (options.persist !== false) {
+      report.analysisReport.outputFile = persistFreshAnalysis(
+        analysis,
+        dataPathFrom(dataDir, "client-scope"),
+      );
+    }
     const plan = buildPlan(analysis, {
       env,
       batchConfig: options.batchConfig,
